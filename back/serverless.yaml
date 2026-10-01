@@ -1,0 +1,105 @@
+org: maikolkolchia
+
+service: gestion-api
+
+provider:
+  name: aws
+  runtime: python3.12
+  region: us-east-1
+  stage: ${opt:stage, 'tenantA'}
+  environment:
+    TENANT_ID: ${param:tenantId}
+    KEYCLOAK_URL: ${env:KEYCLOAK_URL}
+    KEYCLOAK_REALM: ${env:KEYCLOAK_REALM, 'InSync'}
+    KEYCLOAK_CLIENT_ID: ${env:KEYCLOAK_CLIENT_ID, 'Beta0'}
+    KEYCLOAK_CLIENT_SECRET: ${env:KEYCLOAK_CLIENT_SECRET}
+
+params:
+  tenantA:
+    tenantId: A
+  tenantB:
+    tenantId: B
+
+functions:
+  app:
+    handler: wsgi_handler.handler
+    events:
+
+      # =========================
+      # AUTH
+      # =========================
+
+      - http:
+          path: login
+          method: post
+          cors: true
+
+
+      # =========================
+      # USUARIOS (Keycloak)
+      # =========================
+
+      - http:
+          path: usuarios
+          method: get
+          cors: true
+
+      - http:
+          path: usuarios
+          method: post
+          cors: true
+
+      - http:
+          path: usuarios/{id}
+          method: delete
+          cors: true
+
+
+      # =========================
+      # PRODUCTOS
+      # =========================
+
+      - http:
+          path: productos
+          method: get
+          cors: true
+
+      - http:
+          path: productos
+          method: post
+          cors: true
+
+      - http:
+          path: productos/{id}
+          method: put
+          cors: true
+
+      - http:
+          path: productos/{id}
+          method: delete
+          cors: true
+
+
+      # =========================
+      # VENTAS (incluye el detalle en "lineas")
+      # =========================
+
+      - http:
+          path: ventas
+          method: get
+          cors: true
+
+      - http:
+          path: ventas
+          method: post
+          cors: true
+
+
+plugins:
+  - serverless-wsgi
+  - serverless-python-requirements
+
+custom:
+  wsgi:
+    app: app.app
+    packRequirements: false
