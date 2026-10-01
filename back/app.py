@@ -7,7 +7,9 @@ from flask import Flask, request, jsonify, g
 from flask_cors import CORS
 
 import keycloak_service as keycloak
+import semillas
 from Producto import Producto
+from Usuario import Usuario
 from Venta import Venta
 
 app = Flask(__name__)
@@ -19,14 +21,10 @@ TENANT_ID = os.environ.get("TENANT_ID", "A")
 
 # ==========================================
 # LISTAS TEMPORALES (en memoria)
+# Se llenan con datos de prueba (ver semillas.py)
 # ==========================================
 
-productos = []
-ventas = []
-
-productos.append(Producto(
-    "p-01", TENANT_ID, "ARR-01", "Arroz Diana 1kg", 4500, 3200, 100
-).to_json())
+productos, ventas, usuarios = semillas.cargar(TENANT_ID)
 
 
 # ==========================================
@@ -76,6 +74,25 @@ def faltan(datos, *campos):
     return None
 
 
+def error(mensaje, codigo=400):
+    return jsonify({"mensaje": mensaje}), codigo
+
+
+def es_numero(v):
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def es_entero(v):
+    return isinstance(v, int) and not isinstance(v, bool)
+
+
+def buscar(lista, id):
+    for x in lista:
+        if x["id"] == id and x["tenant_id"] == TENANT_ID:
+            return x
+    return None
+
+
 # ==========================================
 # AUTH
 # ==========================================
@@ -84,21 +101,36 @@ def faltan(datos, *campos):
 def login():
 
     datos = cuerpo()
-    error = faltan(datos, "username", "password")
-    if error:
-        return error
+    falta = faltan(datos, "username", "password")
+    if falta:
+        return falta
 
     return jsonify(keycloak.login(datos["username"], datos["password"]))
 
 
 # ==========================================
-# USUARIOS (Keycloak)
+# USUARIOS (datos de prueba en memoria, solo admin)
 # ==========================================
+
+def validar_roles(roles):
+    if not isinstance(roles, list) or not roles:
+        return "Asigna al menos un rol"
+    if any(r not in keycloak.ROLES_ERP for r in roles):
+        return "Rol invalido. Use: " + ", ".join(keycloak.ROLES_ERP)
+    return None
+
+
+def username_en_uso(username, excepto_id=None):
+    return any(
+        u["username"].lower() == username.lower() and u["id"] != excepto_id
+        for u in usuarios if u["tenant_id"] == TENANT_ID
+    )
+
 
 @app.route('/usuarios', methods=['GET'])
 @requiere_roles()
 def listar_usuarios():
-    return jsonify(keycloak.listar_usuarios())
+    return jsonify([u for u in usuarios if u["tenant_id"] == TENANT_ID])
 
 
 @app.route('/usuarios', methods=['POST'])
@@ -106,17 +138,69 @@ def listar_usuarios():
 def agregar_usuario():
 
     datos = cuerpo()
-    error = faltan(datos, "username", "password")
-    if error:
-        return error
+    falta = faltan(datos, "username", "nombre")
+    if falta:
+        return falta
 
-    return jsonify(keycloak.crear_usuario(datos)), 201
+    problema = validar_roles(datos.get("roles"))
+    if problema:
+        return error(problema)
+
+    if username_en_uso(datos["username"]):
+        return error("El usuario ya existe", 409)
+
+    nuevo = Usuario(
+        str(uuid.uuid4()),
+        TENANT_ID,
+        datos["username"],
+        datos["nombre"],
+        datos.get("email", ""),
+        datos["roles"],
+        datos.get("activo", True)
+    )
+
+    usuarios.append(nuevo.to_json())
+
+    return jsonify(nuevo.to_json()), 201
+
+
+@app.route('/usuarios/<id>', methods=['PUT'])
+@requiere_roles()
+def actualizar_usuario(id):
+
+    usuario = buscar(usuarios, id)
+    if not usuario:
+        return error("Usuario no encontrado", 404)
+
+    datos = cuerpo()
+
+    if "roles" in datos:
+        problema = validar_roles(datos["roles"])
+        if problema:
+            return error(problema)
+
+    if "username" in datos and username_en_uso(datos["username"], id):
+        return error("El usuario ya existe", 409)
+
+    for campo in ("username", "nombre", "email", "roles", "activo"):
+        if campo in datos:
+            usuario[campo] = datos[campo]
+
+    return jsonify(usuario)
 
 
 @app.route('/usuarios/<id>', methods=['DELETE'])
 @requiere_roles()
 def eliminar_usuario(id):
-    keycloak.eliminar_usuario(id)
+
+    usuario = buscar(usuarios, id)
+    if not usuario:
+        return error("Usuario no encontrado", 404)
+
+    if usuario["username"] == g.usuario["username"]:
+        return error("No puedes eliminar tu propio usuario", 409)
+
+    usuarios.remove(usuario)
     return jsonify({"mensaje": "Usuario eliminado"})
 
 
@@ -124,10 +208,21 @@ def eliminar_usuario(id):
 # PRODUCTOS
 # ==========================================
 
-def buscar_producto(id):
-    for p in productos:
-        if p["id"] == id and p["tenant_id"] == TENANT_ID:
-            return p
+def sku_en_uso(sku, excepto_id=None):
+    return any(
+        p["sku"].lower() == sku.lower() and p["id"] != excepto_id
+        for p in productos if p["tenant_id"] == TENANT_ID
+    )
+
+
+def validar_producto(datos):
+    if "precio_venta" in datos and (not es_numero(datos["precio_venta"]) or datos["precio_venta"] <= 0):
+        return "El precio debe ser mayor que cero"
+    if "costo_compra" in datos and (not es_numero(datos["costo_compra"]) or datos["costo_compra"] < 0):
+        return "El costo no puede ser negativo"
+    for campo in ("stock_actual", "stock_minimo"):
+        if campo in datos and (not es_entero(datos[campo]) or datos[campo] < 0):
+            return "El stock debe ser un entero, cero o mas"
     return None
 
 
@@ -142,12 +237,19 @@ def listar_productos():
 def agregar_producto():
 
     datos = cuerpo()
-    error = faltan(datos, "sku", "nombre", "precio_venta")
-    if error:
-        return error
+    falta = faltan(datos, "sku", "nombre", "precio_venta")
+    if falta:
+        return falta
+
+    problema = validar_producto(datos)
+    if problema:
+        return error(problema)
+
+    if sku_en_uso(datos["sku"]):
+        return error(f"El codigo {datos['sku']} ya existe", 409)
 
     nuevo = Producto(
-        datos.get("id") or str(uuid.uuid4()),
+        str(uuid.uuid4()),
         TENANT_ID,
         datos["sku"],
         datos["nombre"],
@@ -166,11 +268,19 @@ def agregar_producto():
 @requiere_roles("erp_inventario")
 def actualizar_producto(id):
 
-    producto = buscar_producto(id)
+    producto = buscar(productos, id)
     if not producto:
-        return jsonify({"mensaje": "Producto no encontrado"}), 404
+        return error("Producto no encontrado", 404)
 
     datos = cuerpo()
+
+    problema = validar_producto(datos)
+    if problema:
+        return error(problema)
+
+    if "sku" in datos and sku_en_uso(datos["sku"], id):
+        return error(f"El codigo {datos['sku']} ya existe", 409)
+
     for campo in ("sku", "nombre", "precio_venta", "costo_compra",
                   "stock_actual", "stock_minimo"):
         if campo in datos:
@@ -183,9 +293,9 @@ def actualizar_producto(id):
 @requiere_roles("erp_inventario")
 def eliminar_producto(id):
 
-    producto = buscar_producto(id)
+    producto = buscar(productos, id)
     if not producto:
-        return jsonify({"mensaje": "Producto no encontrado"}), 404
+        return error("Producto no encontrado", 404)
 
     productos.remove(producto)
     return jsonify({"mensaje": "Producto eliminado"})
@@ -194,6 +304,9 @@ def eliminar_producto(id):
 # ==========================================
 # VENTAS (el detalle va dentro de "lineas")
 # ==========================================
+
+METODOS_PAGO = ("efectivo", "tarjeta", "transferencia")
+
 
 @app.route('/ventas', methods=['GET'])
 @requiere_roles("erp_ventas")
@@ -208,28 +321,28 @@ def agregar_venta():
     datos = cuerpo()
     entradas = datos.get("lineas")
     if not isinstance(entradas, list) or not entradas:
-        return jsonify({"mensaje": "La venta requiere al menos una linea"}), 400
+        return error("La venta requiere al menos una linea")
+
+    metodo = datos.get("metodo_pago", "efectivo")
+    if metodo not in METODOS_PAGO:
+        return error("Metodo de pago invalido. Use: " + ", ".join(METODOS_PAGO))
 
     # Validar todo antes de descontar stock
     lineas = []
     for entrada in entradas:
-        producto = buscar_producto(entrada.get("producto_id"))
+        producto = buscar(productos, entrada.get("producto_id"))
         if not producto:
-            return jsonify({
-                "mensaje": f"Producto {entrada.get('producto_id')} no encontrado"
-            }), 404
+            return error(f"Producto {entrada.get('producto_id')} no encontrado", 404)
 
         cantidad = entrada.get("cantidad")
-        if not isinstance(cantidad, int) or cantidad <= 0:
-            return jsonify({"mensaje": "Cantidad invalida"}), 400
+        if not es_entero(cantidad) or cantidad <= 0:
+            return error("Cantidad invalida")
 
         pedido = sum(
             l["cantidad"] for l in lineas if l["producto_id"] == producto["id"]
         ) + cantidad
         if pedido > producto["stock_actual"]:
-            return jsonify({
-                "mensaje": f"Stock insuficiente para {producto['nombre']}"
-            }), 409
+            return error(f"Stock insuficiente para {producto['nombre']}", 409)
 
         lineas.append({
             "producto_id": producto["id"],
@@ -240,7 +353,7 @@ def agregar_venta():
         })
 
     for linea in lineas:
-        buscar_producto(linea["producto_id"])["stock_actual"] -= linea["cantidad"]
+        buscar(productos, linea["producto_id"])["stock_actual"] -= linea["cantidad"]
 
     nueva = Venta(
         str(uuid.uuid4()),
@@ -248,13 +361,49 @@ def agregar_venta():
         g.usuario["username"],
         lineas,
         sum(l["subtotal"] for l in lineas),
-        datos.get("metodo_pago", "efectivo"),
+        metodo,
         datetime.now(timezone.utc).isoformat()
     )
 
     ventas.append(nueva.to_json())
 
     return jsonify(nueva.to_json()), 201
+
+
+@app.route('/ventas/<id>', methods=['PUT'])
+@requiere_roles("erp_ventas")
+def actualizar_venta(id):
+    """Solo se puede corregir el metodo de pago; las lineas y el total
+    son un registro contable y no se editan (para eso se anula la venta)."""
+
+    venta = buscar(ventas, id)
+    if not venta:
+        return error("Venta no encontrada", 404)
+
+    metodo = cuerpo().get("metodo_pago")
+    if metodo not in METODOS_PAGO:
+        return error("Metodo de pago invalido. Use: " + ", ".join(METODOS_PAGO))
+
+    venta["metodo_pago"] = metodo
+    return jsonify(venta)
+
+
+@app.route('/ventas/<id>', methods=['DELETE'])
+@requiere_roles()
+def anular_venta(id):
+    """Anula la venta (solo admin) y devuelve el stock a los productos."""
+
+    venta = buscar(ventas, id)
+    if not venta:
+        return error("Venta no encontrada", 404)
+
+    for linea in venta["lineas"]:
+        producto = buscar(productos, linea["producto_id"])
+        if producto:  # puede haberse eliminado despues de la venta
+            producto["stock_actual"] += linea["cantidad"]
+
+    ventas.remove(venta)
+    return jsonify({"mensaje": "Venta anulada y stock devuelto"})
 
 
 # ==========================================
