@@ -6,6 +6,7 @@ from functools import wraps
 from flask import Flask, request, jsonify, g
 from flask_cors import CORS
 
+import eventos
 import keycloak_service as keycloak
 import semillas
 from Producto import Producto
@@ -31,6 +32,16 @@ productos, ventas, usuarios = semillas.cargar(TENANT_ID)
 # AUTENTICACION / ROLES
 # ==========================================
 
+def evento_seguridad(tipo, **extra):
+    eventos.publicar_evento(eventos.TOPIC_SEGURIDAD, {
+        "tipo": tipo,
+        "endpoint": request.path,
+        "metodo": request.method,
+        "ip": request.remote_addr,
+        **extra
+    })
+
+
 def requiere_roles(*roles):
     """Exige token valido de Keycloak y al menos uno de los roles.
     erp_admin siempre tiene acceso."""
@@ -40,15 +51,22 @@ def requiere_roles(*roles):
         def envoltura(*args, **kwargs):
             cabecera = request.headers.get("Authorization", "")
             if not cabecera.startswith("Bearer "):
+                evento_seguridad("acceso_sin_token")
                 return jsonify({"mensaje": "Token requerido"}), 401
 
             try:
                 g.usuario = keycloak.validar_token(cabecera[7:])
             except keycloak.KeycloakError as e:
+                evento_seguridad("token_invalido")
                 return jsonify({"mensaje": e.mensaje}), e.status
 
             permitidos = set(roles) | {"erp_admin"}
             if not permitidos & set(g.usuario["roles"]):
+                evento_seguridad(
+                    "acceso_denegado",
+                    usuario=g.usuario["username"],
+                    roles=g.usuario["roles"]
+                )
                 return jsonify({"mensaje": "Sin permisos"}), 403
 
             return f(*args, **kwargs)
@@ -105,7 +123,14 @@ def login():
     if falta:
         return falta
 
-    return jsonify(keycloak.login(datos["username"], datos["password"]))
+    try:
+        sesion = keycloak.login(datos["username"], datos["password"])
+    except keycloak.KeycloakError:
+        evento_seguridad("login_fallido", usuario=datos["username"])
+        raise
+
+    evento_seguridad("login_exitoso", usuario=datos["username"], roles=sesion["roles"])
+    return jsonify(sesion)
 
 
 # ==========================================
@@ -208,6 +233,18 @@ def eliminar_usuario(id):
 # PRODUCTOS
 # ==========================================
 
+def evento_producto(tipo, producto):
+    eventos.publicar_evento(eventos.TOPIC_PRODUCTOS, {
+        "tipo": tipo,
+        "usuario": g.usuario["username"],
+        "producto_id": producto["id"],
+        "sku": producto["sku"],
+        "nombre": producto["nombre"],
+        "precio_venta": producto["precio_venta"],
+        "stock_actual": producto["stock_actual"]
+    })
+
+
 def sku_en_uso(sku, excepto_id=None):
     return any(
         p["sku"].lower() == sku.lower() and p["id"] != excepto_id
@@ -260,6 +297,7 @@ def agregar_producto():
     )
 
     productos.append(nuevo.to_json())
+    evento_producto("producto_creado", nuevo.to_json())
 
     return jsonify(nuevo.to_json()), 201
 
@@ -286,6 +324,7 @@ def actualizar_producto(id):
         if campo in datos:
             producto[campo] = datos[campo]
 
+    evento_producto("producto_actualizado", producto)
     return jsonify(producto)
 
 
@@ -298,6 +337,7 @@ def eliminar_producto(id):
         return error("Producto no encontrado", 404)
 
     productos.remove(producto)
+    evento_producto("producto_eliminado", producto)
     return jsonify({"mensaje": "Producto eliminado"})
 
 
@@ -306,6 +346,20 @@ def eliminar_producto(id):
 # ==========================================
 
 METODOS_PAGO = ("efectivo", "tarjeta", "transferencia")
+
+
+def evento_venta(tipo, venta):
+    eventos.publicar_evento(eventos.TOPIC_VENTAS, {
+        "tipo": tipo,
+        "usuario": g.usuario["username"],
+        "venta_id": venta["id"],
+        "total": venta["total"],
+        "metodo_pago": venta["metodo_pago"],
+        "lineas": [
+            {"producto_id": l["producto_id"], "cantidad": l["cantidad"]}
+            for l in venta["lineas"]
+        ]
+    })
 
 
 @app.route('/ventas', methods=['GET'])
@@ -366,6 +420,7 @@ def agregar_venta():
     )
 
     ventas.append(nueva.to_json())
+    evento_venta("venta_registrada", nueva.to_json())
 
     return jsonify(nueva.to_json()), 201
 
@@ -385,6 +440,7 @@ def actualizar_venta(id):
         return error("Metodo de pago invalido. Use: " + ", ".join(METODOS_PAGO))
 
     venta["metodo_pago"] = metodo
+    evento_venta("metodo_pago_corregido", venta)
     return jsonify(venta)
 
 
@@ -403,6 +459,7 @@ def anular_venta(id):
             producto["stock_actual"] += linea["cantidad"]
 
     ventas.remove(venta)
+    evento_venta("venta_anulada", venta)
     return jsonify({"mensaje": "Venta anulada y stock devuelto"})
 
 
