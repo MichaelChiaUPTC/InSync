@@ -1,0 +1,32 @@
+<aside class="surface panel" aria-label="Formulario de producto">
+  <div class="panel-head">
+    <h2>{{ modo() === 'nuevo' ? 'Nuevo producto' : 'Editar producto' }}</h2>
+    <button type="button" class="btn btn-ghost btn-sm btn-icon" (click)="cerrado.emit()" aria-label="Cerrar formulario"><app-icon name="x" [size]="18" /></button>
+  </div>
+  <form (submit)="guardar($event)" novalidate class="form">
+    <div class="field">
+      <label for="codigo">Código</label>
+      <input id="codigo" class="input" [readOnly]="modo() === 'editar'" [value]="codigo()" (input)="codigo.set($any($event.target).value)" placeholder="Ej. ARR-01" autocomplete="off" />
+      @if (modo() === 'nuevo') { <span class="hint">Debe ser único en este inventario.</span> }
+    </div>
+    <div class="field">
+      <label for="nombre">Nombre</label>
+      <input id="nombre" class="input" [readOnly]="modo() === 'editar'" [value]="nombre()" (input)="nombre.set($any($event.target).value)" autocomplete="off" />
+    </div>
+    <div class="dos">
+      <div class="field">
+        <label for="precio">Precio (COP)</label>
+        <input id="precio" class="input" type="number" min="1" step="100" inputmode="numeric" [value]="precio()" (input)="precio.set($any($event.target).value)" />
+      </div>
+      <div class="field">
+        <label for="stock">Stock</label>
+        <input id="stock" class="input" type="number" min="0" step="1" inputmode="numeric" [value]="stock()" (input)="stock.set($any($event.target).value)" />
+      </div>
+    </div>
+    @if (error()) { <p class="form-error" role="alert">{{ error() }}</p> }
+    <div class="fila">
+      <button type="submit" class="btn btn-primary">{{ modo() === 'nuevo' ? 'Crear producto' : 'Guardar cambios' }}</button>
+      <button type="button" class="btn btn-secondary" (click)="cerrado.emit()">Cancelar</button>
+    </div>
+  </form>
+</aside>

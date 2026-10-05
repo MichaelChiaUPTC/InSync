@@ -4,31 +4,31 @@ import { accesoGuard } from './core/guards';
 export const routes: Routes = [
   {
     path: 'login',
-    loadComponent: () => import('./autenticacion/login').then((m) => m.Login),
+    loadComponent: () => import('./login/login.component').then((m) => m.LoginComponent),
   },
   {
     path: '',
     canActivate: [accesoGuard],
-    loadComponent: () => import('./layout/shell').then((m) => m.Shell),
+    loadComponent: () => import('./layout/shell/shell.component').then((m) => m.ShellComponent),
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'inventario' },
       {
         path: 'inventario',
         canActivate: [accesoGuard],
         data: { roles: ['erp_admin', 'erp_ventas', 'erp_inventario'] },
-        loadComponent: () => import('./gestion-inventarios/inventario').then((m) => m.Inventario),
+        loadChildren: () => import('./gestion-inventarios/gestion-inventarios.module').then((m) => m.GestionInventariosModule),
       },
       {
         path: 'ventas',
         canActivate: [accesoGuard],
         data: { roles: ['erp_admin', 'erp_ventas'] },
-        loadComponent: () => import('./gestion-ventas/ventas').then((m) => m.Ventas),
+        loadChildren: () => import('./gestion-ventas/gestion-ventas.module').then((m) => m.GestionVentasModule),
       },
       {
         path: 'usuarios',
         canActivate: [accesoGuard],
         data: { roles: ['erp_admin'] },
-        loadComponent: () => import('./gestion-usuarios/usuarios').then((m) => m.Usuarios),
+        loadChildren: () => import('./gestion-usuarios/gestion-usuarios.module').then((m) => m.GestionUsuariosModule),
       },
     ],
   },

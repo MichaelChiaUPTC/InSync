@@ -4,21 +4,15 @@ service: gestion-api
 
 provider:
   name: aws
-  runtime: python3.12
+  runtime: python3.14
   region: us-east-1
-  stage: ${opt:stage, 'tenantA'}
   environment:
-    TENANT_ID: ${param:tenantId}
-    KEYCLOAK_URL: ${env:KEYCLOAK_URL}
-    KEYCLOAK_REALM: ${env:KEYCLOAK_REALM, 'InSync'}
+    KEYCLOAK_URL: ${env:KEYCLOAK_URL, 'http://localhost:8080'}
     KEYCLOAK_CLIENT_ID: ${env:KEYCLOAK_CLIENT_ID, 'Beta0'}
-    KEYCLOAK_CLIENT_SECRET: ${env:KEYCLOAK_CLIENT_SECRET}
-
-params:
-  tenantA:
-    tenantId: A
-  tenantB:
-    tenantId: B
+    KEYCLOAK_CLIENT_SECRET_A: ${env:KEYCLOAK_CLIENT_SECRET_A, ''}
+    KEYCLOAK_CLIENT_SECRET_B: ${env:KEYCLOAK_CLIENT_SECRET_B, ''}
+    # Vacio = Kafka desactivado. Ej: "54.12.34.56:9092"
+    KAFKA_BOOTSTRAP_SERVERS: ${env:KAFKA_BOOTSTRAP_SERVERS, ''}
 
 functions:
   app:
@@ -26,86 +20,171 @@ functions:
     events:
 
       # =========================
-      # AUTH
+      # TENANT A - LOGIN
       # =========================
 
       - http:
-          path: login
+          path: tenantA/login
           method: post
           cors: true
 
 
       # =========================
-      # USUARIOS (datos de prueba, solo admin)
+      # TENANT A - USUARIOS
       # =========================
 
       - http:
-          path: usuarios
+          path: tenantA/usuarios
           method: get
           cors: true
 
       - http:
-          path: usuarios
+          path: tenantA/usuarios
           method: post
           cors: true
 
       - http:
-          path: usuarios/{id}
+          path: tenantA/usuarios/{id}
           method: put
           cors: true
 
       - http:
-          path: usuarios/{id}
+          path: tenantA/usuarios/{id}
           method: delete
           cors: true
 
 
       # =========================
-      # PRODUCTOS
+      # TENANT A - PRODUCTOS
       # =========================
 
       - http:
-          path: productos
+          path: tenantA/productos
           method: get
           cors: true
 
       - http:
-          path: productos
+          path: tenantA/productos
           method: post
           cors: true
 
       - http:
-          path: productos/{id}
+          path: tenantA/productos/{id}
           method: put
           cors: true
 
       - http:
-          path: productos/{id}
+          path: tenantA/productos/{id}
           method: delete
           cors: true
 
 
       # =========================
-      # VENTAS (incluye el detalle en "lineas")
+      # TENANT A - VENTAS
       # =========================
 
       - http:
-          path: ventas
+          path: tenantA/ventas
           method: get
           cors: true
 
       - http:
-          path: ventas
+          path: tenantA/ventas
           method: post
           cors: true
 
       - http:
-          path: ventas/{id}
+          path: tenantA/ventas/{id}
           method: put
           cors: true
 
       - http:
-          path: ventas/{id}
+          path: tenantA/ventas/{id}
+          method: delete
+          cors: true
+
+
+      # =========================
+      # TENANT B - LOGIN
+      # =========================
+
+      - http:
+          path: tenantB/login
+          method: post
+          cors: true
+
+
+      # =========================
+      # TENANT B - USUARIOS
+      # =========================
+
+      - http:
+          path: tenantB/usuarios
+          method: get
+          cors: true
+
+      - http:
+          path: tenantB/usuarios
+          method: post
+          cors: true
+
+      - http:
+          path: tenantB/usuarios/{id}
+          method: put
+          cors: true
+
+      - http:
+          path: tenantB/usuarios/{id}
+          method: delete
+          cors: true
+
+
+      # =========================
+      # TENANT B - PRODUCTOS
+      # =========================
+
+      - http:
+          path: tenantB/productos
+          method: get
+          cors: true
+
+      - http:
+          path: tenantB/productos
+          method: post
+          cors: true
+
+      - http:
+          path: tenantB/productos/{id}
+          method: put
+          cors: true
+
+      - http:
+          path: tenantB/productos/{id}
+          method: delete
+          cors: true
+
+
+      # =========================
+      # TENANT B - VENTAS
+      # =========================
+
+      - http:
+          path: tenantB/ventas
+          method: get
+          cors: true
+
+      - http:
+          path: tenantB/ventas
+          method: post
+          cors: true
+
+      - http:
+          path: tenantB/ventas/{id}
+          method: put
+          cors: true
+
+      - http:
+          path: tenantB/ventas/{id}
           method: delete
           cors: true
 
@@ -117,4 +196,3 @@ plugins:
 custom:
   wsgi:
     app: app.app
-    packRequirements: false

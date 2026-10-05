@@ -1,0 +1,35 @@
+<main class="login">
+  <section class="lado" aria-label="Sobre InSync">
+    <div class="marca"><app-marca [size]="36" /><span>InSync</span></div>
+    <div class="mensaje">
+      <h1>Inventario y ventas de tu negocio, en sincronía.</h1>
+      <ul>
+        <li><app-icon name="box" /> Productos y existencias al día</li>
+        <li><app-icon name="cart" /> Ventas que descuentan stock al instante</li>
+        <li><app-icon name="users" /> Cada empresa opera en su propia instancia</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="form-lado">
+    <form (submit)="entrar($event)" novalidate>
+      <div>
+        <h2>Entrar a InSync</h2>
+        <p class="muted">Ingresa con tu usuario y contraseña. Te llevaremos a tu negocio.</p>
+      </div>
+
+      <div class="field">
+        <label for="usuario">Usuario</label>
+        <input id="usuario" class="input" autocomplete="username" [value]="usuario()" (input)="usuario.set($any($event.target).value)" />
+      </div>
+
+      <div class="field">
+        <label for="clave">Contraseña</label>
+        <input id="clave" class="input" type="password" autocomplete="current-password" [value]="clave()" (input)="clave.set($any($event.target).value)" />
+      </div>
+
+      @if (error()) { <p class="form-error" role="alert">{{ error() }}</p> }
+      <button class="btn btn-primary" type="submit" [disabled]="cargando()">{{ cargando() ? 'Entrando…' : 'Entrar' }}</button>
+    </form>
+  </section>
+</main>

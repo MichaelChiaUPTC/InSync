@@ -1,0 +1,4 @@
+:host { display: block; position: sticky; top: 24px; }
+.form { display: grid; gap: 16px; }
+.dos { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.fila { display: flex; gap: 8px; flex-wrap: wrap; }

@@ -1,0 +1,63 @@
+<div class="caja">
+  <section>
+    <div class="toolbar">
+      <div class="search">
+        <app-icon name="search" [size]="18" />
+        <label for="q" class="sr-only">Buscar producto</label>
+        <input id="q" class="input" type="search" placeholder="Buscar producto para vender" [value]="q()" (input)="q.set($any($event.target).value)" />
+      </div>
+    </div>
+    <div class="surface lista">
+      @for (p of catalogo(); track p.id) {
+        <div class="item" [class.agotado]="p.stock === 0">
+          <div class="info">
+            <strong>{{ p.nombre }}</strong>
+            <small class="muted">{{ p.codigo }} · {{ p.stock === 0 ? 'Agotado' : p.stock + ' disponibles' }}</small>
+          </div>
+          <span class="precio">{{ cop(p.precio) }}</span>
+          <button type="button" class="btn btn-secondary btn-sm" (click)="agregar(p.id)" [disabled]="p.stock === 0 || cantidadEn(p.id) >= p.stock" [attr.aria-label]="'Agregar ' + p.nombre">
+            <app-icon name="plus" [size]="16" /> Agregar
+          </button>
+        </div>
+      } @empty {
+        <div class="empty"><strong>Sin resultados</strong>Ningún producto coincide con “{{ q() }}”.</div>
+      }
+    </div>
+  </section>
+
+  <aside class="surface ticket" aria-label="Venta actual">
+    <h2>Venta actual</h2>
+    @if (lineas().length === 0) {
+      <p class="vacio muted">Aún no agregas productos. Elige uno de la lista para empezar.</p>
+    } @else {
+      <ul class="lineas">
+        @for (l of lineas(); track l.p.id) {
+          <li>
+            <div class="nom">
+              <span>{{ l.p.nombre }}</span>
+              <small class="muted">{{ cop(l.p.precio) }} c/u</small>
+            </div>
+            <div class="paso" role="group" [attr.aria-label]="'Cantidad de ' + l.p.nombre">
+              <button type="button" class="btn btn-secondary btn-sm btn-icon" (click)="cambiar(l.p.id, -1)" aria-label="Quitar una unidad"><app-icon name="minus" [size]="16" /></button>
+              <span class="cant" aria-live="polite">{{ l.cantidad }}</span>
+              <button type="button" class="btn btn-secondary btn-sm btn-icon" (click)="cambiar(l.p.id, 1)" [disabled]="l.cantidad >= l.p.stock" aria-label="Agregar una unidad"><app-icon name="plus" [size]="16" /></button>
+            </div>
+            <span class="sub">{{ cop(l.cantidad * l.p.precio) }}</span>
+          </li>
+        }
+      </ul>
+    }
+    <div class="field">
+      <label for="mp">Método de pago</label>
+      <select id="mp" class="input" [value]="metodoPago()" (change)="metodoPago.set($any($event.target).value)">
+        @for (m of metodos; track m.id) { <option [value]="m.id">{{ m.etiqueta }}</option> }
+      </select>
+    </div>
+    <div class="total"><span>Total</span><strong>{{ cop(total()) }}</strong></div>
+    @if (error()) { <p class="form-error" role="alert">{{ error() }}</p> }
+    <button type="button" class="btn btn-primary" (click)="registrar()" [disabled]="lineas().length === 0">Registrar venta</button>
+    @if (lineas().length > 0) {
+      <button type="button" class="btn btn-ghost" (click)="carrito.set([])">Vaciar venta</button>
+    }
+  </aside>
+</div>

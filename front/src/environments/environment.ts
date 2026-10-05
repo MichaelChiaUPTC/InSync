@@ -1,10 +1,13 @@
 import { Entorno } from './entorno';
-import { temaA } from './temas';
+
+// Endpoints desplegados con Serverless (un prefijo por negocio: /tenantA y /tenantB).
+// Para usar el backend local (serverless wsgi serve): 'http://localhost:5000'
+const BASE = 'https://jkp4ha5lyd.execute-api.us-east-1.amazonaws.com/dev';
 
 export const environment: Entorno = {
   production: false,
-  name: 'supermercado-el-ahorro',
-  tenant: 'A',
-  apiUrl: 'http://localhost:5000',
-  theme: temaA,
+  apiUrls: {
+    A: `${BASE}/tenantA`,
+    B: `${BASE}/tenantB`,
+  },
 };

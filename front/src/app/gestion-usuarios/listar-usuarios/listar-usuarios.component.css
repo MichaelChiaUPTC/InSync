@@ -1,0 +1,2 @@
+.roles { display: flex; flex-wrap: wrap; gap: 6px; }
+.pager { border-top: 1px solid var(--color-border); font-size: 0.875rem; }

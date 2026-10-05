@@ -1,0 +1,81 @@
+<div class="page">
+  <header class="page-head">
+    <div>
+      <h1>Ventas</h1>
+      <p>Registra ventas del mostrador o revisa lo vendido en {{ store.tenant()?.nombre }}.</p>
+    </div>
+    <div class="tabs" role="tablist" aria-label="Vista de ventas">
+      @if (puedeVender()) {
+        <button type="button" role="tab" [attr.aria-selected]="vista() === 'nueva'" [class.on]="vista() === 'nueva'" (click)="vista.set('nueva')"><app-icon name="cart" [size]="18" /> Nueva venta</button>
+      }
+      <button type="button" role="tab" [attr.aria-selected]="vista() === 'historial'" [class.on]="vista() === 'historial'" (click)="vista.set('historial')"><app-icon name="history" [size]="18" /> Historial</button>
+    </div>
+  </header>
+
+  @if (vista() === 'nueva') {
+    <app-crear-venta />
+  } @else {
+    <div class="toolbar">
+      <div class="field">
+        <label for="d">Desde</label>
+        <input id="d" class="input" type="date" [value]="desde()" (input)="desde.set($any($event.target).value)" />
+      </div>
+      <div class="field">
+        <label for="h">Hasta</label>
+        <input id="h" class="input" type="date" [value]="hasta()" (input)="hasta.set($any($event.target).value)" />
+      </div>
+      @if (desde() || hasta()) {
+        <button type="button" class="btn btn-ghost btn-sm limpiar" (click)="desde.set(''); hasta.set('')"><app-icon name="x" [size]="16" /> Limpiar filtro</button>
+      }
+    </div>
+    <div class="surface">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>N.º</th><th>Fecha</th><th>Vendedor</th><th>Pago</th><th class="num">Líneas</th><th class="num">Total</th><th><span class="sr-only">Detalle</span></th></tr></thead>
+          <tbody>
+            @for (v of filtradas(); track v.id) {
+              <tr>
+                <td class="code">#{{ v.id.slice(0, 8) }}</td>
+                <td>{{ fecha(v.fecha) }}</td>
+                <td>{{ v.usuario }}</td>
+                <td>
+                  @if (puedeVender()) {
+                    <select class="input pago" [value]="v.metodoPago" (change)="cambiarPago(v, $any($event.target).value)" [attr.aria-label]="'Método de pago de la venta ' + v.id.slice(0, 8)">
+                      @for (m of metodos; track m.id) { <option [value]="m.id">{{ m.etiqueta }}</option> }
+                    </select>
+                  } @else { {{ etiquetaPago(v.metodoPago) }} }
+                </td>
+                <td class="num">{{ v.detalle.length }}</td>
+                <td class="num"><strong>{{ cop(v.total) }}</strong></td>
+                <td class="actions">
+                  <button type="button" class="btn btn-ghost btn-sm" (click)="abierta.set(abierta() === v.id ? null : v.id)" [attr.aria-expanded]="abierta() === v.id">
+                    Detalle <app-icon [name]="abierta() === v.id ? 'down' : 'right'" [size]="16" />
+                  </button>
+                  @if (esAdmin()) {
+                    <button type="button" class="btn btn-ghost btn-sm" (click)="anular(v)" [attr.aria-label]="'Anular venta ' + v.id.slice(0, 8)"><app-icon name="trash" [size]="16" /> Anular</button>
+                  }
+                </td>
+              </tr>
+              @if (abierta() === v.id) {
+                <tr class="detalle">
+                  <td colspan="7">
+                    <ul>
+                      @for (l of v.detalle; track l.productoId) {
+                        <li><span>{{ l.cantidad }} × {{ l.nombre }}</span><span>{{ cop(l.cantidad * l.precio) }}</span></li>
+                      }
+                    </ul>
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+      @if (filtradas().length === 0) {
+        <div class="empty"><strong>Sin ventas en ese rango</strong>Prueba con otras fechas o limpia el filtro.</div>
+      } @else {
+        <div class="pager"><span>{{ filtradas().length }} ventas</span><strong class="sumado">{{ cop(sumaFiltrada()) }}</strong></div>
+      }
+    </div>
+  }
+</div>

@@ -1,0 +1,7 @@
+:host { display: block; position: sticky; top: 24px; }
+.form { display: grid; gap: 16px; }
+fieldset { border: 0; padding: 0; margin: 0; }
+legend { padding: 0; margin-bottom: 6px; }
+.check { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; cursor: pointer; }
+.check input { width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--color-primary); flex: none; cursor: pointer; }
+.fila { display: flex; gap: 8px; flex-wrap: wrap; }

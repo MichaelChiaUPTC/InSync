@@ -1,7 +1,9 @@
 import { Injectable, computed, signal } from '@angular/core';
-import {
-  Producto, Rol, Sesion, Tenant, Usuario, Venta,
-} from './models';
+import { Producto } from '../gestion-inventarios/Interfaces/producto.interface';
+import { Usuario } from '../gestion-usuarios/Interfaces/usuario.interface';
+import { Venta } from '../gestion-ventas/Interfaces/venta.interface';
+import { Rol, Sesion, Tenant } from './models';
+import { aplicarTema } from './tema';
 
 export const TENANTS: Tenant[] = [
   { id: 'A', nombre: 'Supermercado El Ahorro', actividad: 'Supermercado y abarrotes', puerto: 5000 },
@@ -15,6 +17,8 @@ export class Store {
   readonly tenants = TENANTS;
 
   readonly sesion = signal<Sesion | null>(this.leerSesion());
+  // Base de todas las peticiones: la API del negocio con sesion iniciada
+  readonly apiUrl = computed(() => this.sesion()?.apiUrl ?? '');
   readonly tenant = computed(() => TENANTS.find((t) => t.id === this.sesion()?.tenant) ?? null);
 
   readonly productos = signal<Producto[]>([]);
@@ -24,13 +28,20 @@ export class Store {
   readonly avisos = signal<{ id: number; texto: string; tipo: 'ok' | 'error' }[]>([]);
   private avisoId = 0;
 
+  constructor() {
+    // Sesion restaurada al recargar: vuelve a aplicar el tema de su negocio
+    aplicarTema(this.sesion()?.tenant ?? null);
+  }
+
   entrar(s: Sesion) {
     this.sesion.set(s);
+    aplicarTema(s.tenant);
     try { sessionStorage.setItem(CLAVE, JSON.stringify(s)); } catch { /* sin almacenamiento */ }
   }
 
   salir() {
     this.sesion.set(null);
+    aplicarTema(null);
     this.productos.set([]);
     this.ventas.set([]);
     this.usuarios.set([]);
@@ -56,7 +67,7 @@ export class Store {
     try {
       const raw = sessionStorage.getItem(CLAVE);
       const s = raw ? (JSON.parse(raw) as Sesion) : null;
-      if (s && s.expiraEn <= Date.now()) {
+      if (s && (s.expiraEn <= Date.now() || !s.apiUrl)) {
         sessionStorage.removeItem(CLAVE);
         return null;
       }
