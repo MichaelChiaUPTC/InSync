@@ -7,10 +7,10 @@ provider:
   runtime: python3.14
   region: us-east-1
   environment:
-    KEYCLOAK_URL: ${env:KEYCLOAK_URL, 'http://localhost:8080'}
+    KEYCLOAK_URL: ${env:KEYCLOAK_URL, 'https://courses-medications-white-cadillac.trycloudflare.com'}
     KEYCLOAK_CLIENT_ID: ${env:KEYCLOAK_CLIENT_ID, 'Beta0'}
-    KEYCLOAK_CLIENT_SECRET_A: ${env:KEYCLOAK_CLIENT_SECRET_A, ''}
-    KEYCLOAK_CLIENT_SECRET_B: ${env:KEYCLOAK_CLIENT_SECRET_B, ''}
+    KEYCLOAK_CLIENT_SECRET_A: ${env:KEYCLOAK_CLIENT_SECRET_A, 'rLZBbYYwUcgeLBTUMIdh6YMB6lPCuLi4'}
+    KEYCLOAK_CLIENT_SECRET_B: ${env:KEYCLOAK_CLIENT_SECRET_B, 'sARcBBofRI6NWwJmkNrNmcfllu72zzVB'}
     # Vacio = Kafka desactivado. Ej: "54.12.34.56:9092"
     KAFKA_BOOTSTRAP_SERVERS: ${env:KAFKA_BOOTSTRAP_SERVERS, ''}
 

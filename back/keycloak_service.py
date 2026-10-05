@@ -4,20 +4,20 @@ import os
 
 import requests
 
-# Keycloak: local (localhost:8080) o en otra maquina. Los secrets NO van en el codigo.
-# Cualquier valor se puede sobreescribir con variables de entorno.
-KEYCLOAK_URL = os.environ.get("KEYCLOAK_URL", "http://localhost:8080").rstrip("/")
+# Keycloak en otra maquina, expuesto con un tunel de cloudflared (la URL cambia al reiniciarlo:
+# actualizarla aqui y en serverless.yaml). Todo se puede sobreescribir con variables de entorno.
+KEYCLOAK_URL = os.environ.get("KEYCLOAK_URL", "https://courses-medications-white-cadillac.trycloudflare.com").rstrip("/")
 CLIENT_ID = os.environ.get("KEYCLOAK_CLIENT_ID", "Beta0")
 
 # Un realm por negocio (tenant). El negocio lo define la ruta (/tenantA, /tenantB).
 REALMS = {
     "A": {
         "realm": os.environ.get("KEYCLOAK_REALM_A", "tenantA"),
-        "secret": os.environ.get("KEYCLOAK_CLIENT_SECRET_A", ""),
+        "secret": os.environ.get("KEYCLOAK_CLIENT_SECRET_A", "rLZBbYYwUcgeLBTUMIdh6YMB6lPCuLi4"),
     },
     "B": {
         "realm": os.environ.get("KEYCLOAK_REALM_B", "tenantB"),
-        "secret": os.environ.get("KEYCLOAK_CLIENT_SECRET_B", ""),
+        "secret": os.environ.get("KEYCLOAK_CLIENT_SECRET_B", "sARcBBofRI6NWwJmkNrNmcfllu72zzVB"),
     },
 }
 
