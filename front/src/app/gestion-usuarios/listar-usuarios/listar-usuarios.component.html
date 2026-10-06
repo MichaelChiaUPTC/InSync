@@ -1,0 +1,40 @@
+<div class="page">
+  <header class="page-head">
+    <div>
+      <h1>Usuarios</h1>
+      <p>Personas con acceso a {{ store.tenant()?.nombre }} y sus roles.</p>
+    </div>
+    <button type="button" class="btn btn-primary" (click)="nuevo()"><app-icon name="plus" /> Nuevo usuario</button>
+  </header>
+
+  <div class="split" [class.open]="panel()">
+    <div class="surface">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Nombre</th><th>Usuario</th><th>Correo</th><th>Roles</th><th><span class="sr-only">Acciones</span></th></tr></thead>
+          <tbody>
+            @for (u of store.usuarios(); track u.id) {
+              <tr [class.sel]="editando()?.id === u.id">
+                <td><strong>{{ u.nombre }}</strong> @if (!u.activo) { <span class="pill bad">Inactivo</span> }</td>
+                <td class="muted">{{ u.username }}</td>
+                <td class="muted">{{ u.email }}</td>
+                <td class="roles">
+                  @for (r of u.roles; track r) { <span class="pill info">{{ etiqueta(r) }}</span> }
+                </td>
+                <td class="actions">
+                  <button type="button" class="btn btn-ghost btn-sm" (click)="editar(u)" [attr.aria-label]="'Editar ' + u.nombre"><app-icon name="pencil" [size]="16" /> Editar</button>
+                  <button type="button" class="btn btn-ghost btn-sm" (click)="eliminar(u)" [attr.aria-label]="'Eliminar ' + u.nombre"><app-icon name="trash" [size]="16" /> Eliminar</button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="pager">Estos son los usuarios reales de Keycloak de este negocio: los que crees aquí pueden iniciar sesión.</p>
+    </div>
+
+    @if (panel()) {
+      <app-crear-usuario [usuario]="editando()" (cerrado)="cerrar()" />
+    }
+  </div>
+</div>

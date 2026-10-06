@@ -1,0 +1,75 @@
+<div class="page">
+  <header class="page-head">
+    <div>
+      <h1>Inventario</h1>
+      <p>
+        {{ store.productos().length }} productos en {{ store.tenant()?.nombre }}.
+        @if (!puedeEditar()) { Tu rol solo permite consultar. }
+      </p>
+    </div>
+    @if (puedeEditar()) {
+      <button type="button" class="btn btn-primary" (click)="nuevo()"><app-icon name="plus" /> Nuevo producto</button>
+    }
+  </header>
+
+  <div class="split" [class.open]="panel()">
+    <section>
+      <div class="toolbar">
+        <div class="search">
+          <app-icon name="search" [size]="18" />
+          <label for="q" class="sr-only">Buscar producto</label>
+          <input id="q" class="input" type="search" placeholder="Buscar por código o nombre" [value]="q()" (input)="buscar($any($event.target).value)" />
+        </div>
+      </div>
+
+      <div class="surface">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Código</th><th>Producto</th><th class="num">Precio</th><th class="num">Stock</th><th>Estado</th>
+                @if (puedeEditar()) { <th><span class="sr-only">Acciones</span></th> }
+              </tr>
+            </thead>
+            <tbody>
+              @for (p of pagina(); track p.id) {
+                <tr [class.sel]="editando()?.id === p.id">
+                  <td class="code">{{ p.codigo }}</td>
+                  <td>{{ p.nombre }}</td>
+                  <td class="num">{{ cop(p.precio) }}</td>
+                  <td class="num">{{ p.stock }}</td>
+                  <td>
+                    @if (p.stock === 0) { <span class="pill bad">Agotado</span> }
+                    @else if (p.stock <= bajo) { <span class="pill warn">Stock bajo</span> }
+                    @else { <span class="pill ok">Disponible</span> }
+                  </td>
+                  @if (puedeEditar()) {
+                    <td class="actions">
+                      <button type="button" class="btn btn-ghost btn-sm" (click)="editar(p)" [attr.aria-label]="'Editar ' + p.nombre"><app-icon name="pencil" [size]="16" /> Editar</button>
+                      <button type="button" class="btn btn-ghost btn-sm" (click)="eliminar(p)" [attr.aria-label]="'Eliminar ' + p.nombre"><app-icon name="trash" [size]="16" /> Eliminar</button>
+                    </td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        @if (filtrados().length === 0) {
+          <div class="empty"><strong>Sin resultados</strong>Ningún producto coincide con “{{ q() }}”.</div>
+        } @else {
+          <div class="pager">
+            <span>{{ desde() }}–{{ hasta() }} de {{ filtrados().length }}</span>
+            <div class="btn-group">
+              <button type="button" class="btn btn-secondary btn-sm btn-icon" (click)="ir(-1)" [disabled]="pag() === 0" aria-label="Página anterior"><app-icon name="left" [size]="18" /></button>
+              <button type="button" class="btn btn-secondary btn-sm btn-icon" (click)="ir(1)" [disabled]="pag() >= paginas() - 1" aria-label="Página siguiente"><app-icon name="right" [size]="18" /></button>
+            </div>
+          </div>
+        }
+      </div>
+    </section>
+
+    @if (panel(); as modo) {
+      <app-crear-producto [modo]="modo" [producto]="editando()" (cerrado)="cerrar()" />
+    }
+  </div>
+</div>

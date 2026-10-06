@@ -50,24 +50,6 @@
               "extractLicenses": false,
               "sourceMap": true
             },
-            "tenantA": {
-              "fileReplacements": [
-                {
-                  "replace": "src/environments/environment.ts",
-                  "with": "src/environments/environment.tenantA.ts"
-                }
-              ],
-              "outputHashing": "all"
-            },
-            "tenantB": {
-              "fileReplacements": [
-                {
-                  "replace": "src/environments/environment.ts",
-                  "with": "src/environments/environment.tenantB.ts"
-                }
-              ],
-              "outputHashing": "all"
-            },
             "aws": {
               "fileReplacements": [
                 {
@@ -88,12 +70,6 @@
             },
             "development": {
               "buildTarget": "ProyectoFront:build:development"
-            },
-            "tenantA": {
-              "buildTarget": "ProyectoFront:build:tenantA"
-            },
-            "tenantB": {
-              "buildTarget": "ProyectoFront:build:tenantB"
             },
             "aws": {
               "buildTarget": "ProyectoFront:build:aws"

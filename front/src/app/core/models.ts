@@ -14,48 +14,9 @@ export interface Tenant {
   puerto: number;
 }
 
-export interface Producto {
-  id: string;
-  codigo: string;
-  nombre: string;
-  precio: number;
-  stock: number;
-}
-
-export type MetodoPago = 'efectivo' | 'tarjeta' | 'transferencia';
-export const METODOS_PAGO: { id: MetodoPago; etiqueta: string }[] = [
-  { id: 'efectivo', etiqueta: 'Efectivo' },
-  { id: 'tarjeta', etiqueta: 'Tarjeta' },
-  { id: 'transferencia', etiqueta: 'Transferencia' },
-];
-
-export interface LineaVenta {
-  productoId: string;
-  nombre: string;
-  cantidad: number;
-  precio: number;
-}
-
-export interface Venta {
-  id: string;
-  usuario: string;
-  fecha: string;
-  total: number;
-  metodoPago: MetodoPago;
-  detalle: LineaVenta[];
-}
-
-export interface Usuario {
-  id: string;
-  username: string;
-  nombre: string;
-  email: string;
-  roles: Rol[];
-  activo: boolean;
-}
-
 export interface Sesion {
   tenant: TenantId;
+  apiUrl: string; // API de Serverless del negocio al que pertenece el usuario
   nombre: string;
   roles: Rol[];
   accessToken: string;

@@ -1,0 +1,196 @@
+<div class="page">
+  <header class="page-head">
+    <div>
+      <h1>Estadísticas de ventas</h1>
+      <p>Cómo van las ventas de {{ store.tenant()?.nombre }}: ingresos, productos y formas de pago.</p>
+    </div>
+  </header>
+
+  <div class="filtros">
+    <div class="seg" role="group" aria-label="Periodo">
+      @for (r of rangos; track r.id) {
+        <button type="button" [class.on]="rango() === r.id" [attr.aria-pressed]="rango() === r.id" (click)="rango.set(r.id); cerrarTip()">{{ r.texto }}</button>
+      }
+    </div>
+    <div class="seg" role="group" aria-label="Forma de ver los datos">
+      <button type="button" [class.on]="vista() === 'graficas'" [attr.aria-pressed]="vista() === 'graficas'" (click)="vista.set('graficas'); cerrarTip()">Gráficas</button>
+      <button type="button" [class.on]="vista() === 'tablas'" [attr.aria-pressed]="vista() === 'tablas'" (click)="vista.set('tablas'); cerrarTip()">Tablas</button>
+    </div>
+  </div>
+
+  <div class="dash" [class.cargando]="cargando()" [attr.aria-busy]="cargando()">
+    <section class="kpis" aria-label="Resumen del periodo">
+      <div class="surface kpi"><span class="kpi-l">Ingresos</span><strong class="kpi-v">{{ cop(resumen().ingresos) }}</strong></div>
+      <div class="surface kpi"><span class="kpi-l">Ventas realizadas</span><strong class="kpi-v">{{ n(resumen().ventas) }}</strong></div>
+      <div class="surface kpi"><span class="kpi-l">Ticket promedio</span><strong class="kpi-v">{{ cop(resumen().ticket) }}</strong></div>
+      <div class="surface kpi"><span class="kpi-l">Unidades vendidas</span><strong class="kpi-v">{{ n(resumen().unidades) }}</strong></div>
+    </section>
+
+    @if (!cargando() && ventas().length === 0) {
+      <div class="surface empty"><strong>Sin ventas en este periodo</strong>Prueba con otro periodo o registra una venta desde la sección Ventas.</div>
+    } @else if (vista() === 'graficas') {
+      <div class="grafs">
+        <section class="surface card ancha">
+          <div><h2>Ingresos por día</h2><p class="sub">Pesos colombianos vendidos cada día del periodo</p></div>
+          <div class="viz" #lienzo>
+            <svg [attr.width]="geo().w" [attr.height]="alto" [attr.viewBox]="'0 0 ' + geo().w + ' ' + alto" role="img" [attr.aria-label]="resumenAccesible()"
+                 tabindex="0" (keydown)="teclaLinea($event)" (focus)="enfocarLinea()" (blur)="cerrarTip()">
+              @for (m of geo().marcasY; track $index) {
+                <line class="rejilla" [attr.x1]="margen.izq" [attr.x2]="geo().w - margen.der" [attr.y1]="m.y" [attr.y2]="m.y" />
+                <text class="eje" [attr.x]="margen.izq - 8" [attr.y]="m.y" text-anchor="end" dominant-baseline="middle">{{ m.texto }}</text>
+              }
+              <line class="base" [attr.x1]="margen.izq" [attr.x2]="geo().w - margen.der" [attr.y1]="geo().base" [attr.y2]="geo().base" />
+              @for (m of geo().marcasX; track m.x) {
+                <text class="eje" [attr.x]="m.x" [attr.y]="geo().base + 20" text-anchor="middle">{{ m.texto }}</text>
+              }
+              @if (geo().area) { <path class="area" [attr.d]="geo().area" /> }
+              @if (geo().puntos.length > 1) { <path class="linea" [attr.d]="geo().linea" /> }
+              @if (geo().ultimo; as u) {
+                <circle class="anillo" [attr.cx]="u.x" [attr.cy]="u.y" r="6" />
+                <circle class="punto" [attr.cx]="u.x" [attr.cy]="u.y" r="4" />
+              }
+              @if (geo().pico; as p) {
+                <text class="valor" [attr.x]="geo().xPico" [attr.y]="p.y - 12" text-anchor="middle">{{ cop(p.ingresos) }}</text>
+              }
+              @if (activo() !== null) {
+                @let a = geo().puntos[activo()!];
+                <line class="cruz" [attr.x1]="a.x" [attr.x2]="a.x" [attr.y1]="margen.arr" [attr.y2]="geo().base" />
+                <circle class="anillo" [attr.cx]="a.x" [attr.cy]="a.y" r="6" />
+                <circle class="punto" [attr.cx]="a.x" [attr.cy]="a.y" r="4" />
+              }
+              <rect class="zona" [attr.x]="margen.izq" [attr.y]="margen.arr" [attr.width]="geo().pw" [attr.height]="geo().ph" (pointermove)="moverLinea($event)" (pointerleave)="cerrarTip()" />
+            </svg>
+            <ng-container *ngTemplateOutlet="tooltip; context: { id: 'dias' }" />
+          </div>
+        </section>
+
+        <section class="surface card">
+          <div><h2>Productos más vendidos</h2><p class="sub">Los 6 con más ingresos en el periodo</p></div>
+          <div class="viz">
+            <ng-container *ngTemplateOutlet="barras; context: { lista: productos(), id: 'productos', nombre: 'Ingresos por producto' }" />
+            <ng-container *ngTemplateOutlet="tooltip; context: { id: 'productos' }" />
+          </div>
+        </section>
+
+        <section class="surface card">
+          <div><h2>Ventas por vendedor</h2><p class="sub">Ingresos generados por cada persona</p></div>
+          <div class="viz">
+            <ng-container *ngTemplateOutlet="barras; context: { lista: vendedores(), id: 'vendedores', nombre: 'Ingresos por vendedor' }" />
+            <ng-container *ngTemplateOutlet="tooltip; context: { id: 'vendedores' }" />
+          </div>
+        </section>
+
+        <section class="surface card ancha">
+          <div><h2>Formas de pago</h2><p class="sub">Qué parte de los ingresos entró por cada método</p></div>
+          <div class="viz">
+            <div class="apilada" role="img" aria-label="Reparto de los ingresos por método de pago">
+              @for (p of pagos(); track p.id) {
+                @if (p.ingresos > 0) {
+                  <span class="sp" tabindex="0" [style.--g]="p.pct" [style.background]="colorPago[p.id]"
+                        (pointermove)="mostrar($event, 'pagos', p.etiqueta, filasPago(p))" (focus)="mostrar($event, 'pagos', p.etiqueta, filasPago(p))"
+                        (pointerleave)="cerrarTip()" (blur)="cerrarTip()"></span>
+                }
+              }
+            </div>
+            <ul class="leyenda">
+              @for (p of pagos(); track p.id) {
+                <li><i class="llave" [style.background]="colorPago[p.id]"></i><span class="l-n">{{ p.etiqueta }}</span><strong>{{ cop(p.ingresos) }}</strong><span class="l-p">{{ pct(p.pct) }} %</span></li>
+              }
+            </ul>
+            <ng-container *ngTemplateOutlet="tooltip; context: { id: 'pagos' }" />
+          </div>
+        </section>
+      </div>
+    } @else {
+      <div class="grafs">
+        <section class="surface card ancha">
+          <h2>Ingresos por día</h2>
+          <div class="table-wrap tabla-alta">
+            <table>
+              <thead><tr><th>Día</th><th class="num">Ventas</th><th class="num">Ingresos</th></tr></thead>
+              <tbody>
+                @for (p of serie(); track p.dia) {
+                  <tr><td>{{ dia(p.fecha) }}</td><td class="num">{{ n(p.ventas) }}</td><td class="num">{{ cop(p.ingresos) }}</td></tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="surface card">
+          <h2>Productos más vendidos</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Producto</th><th class="num">Unidades</th><th class="num">Ingresos</th></tr></thead>
+              <tbody>
+                @for (b of productos(); track b.clave) {
+                  <tr><td>{{ b.etiqueta }}</td><td class="num">{{ n(b.unidades) }}</td><td class="num">{{ cop(b.ingresos) }}</td></tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="surface card">
+          <h2>Ventas por vendedor</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Vendedor</th><th class="num">Ventas</th><th class="num">Ingresos</th></tr></thead>
+              <tbody>
+                @for (b of vendedores(); track b.clave) {
+                  <tr><td>{{ b.etiqueta }}</td><td class="num">{{ n(b.ventas) }}</td><td class="num">{{ cop(b.ingresos) }}</td></tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="surface card ancha">
+          <h2>Formas de pago</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Método</th><th class="num">Ventas</th><th class="num">Ingresos</th><th class="num">Del total</th></tr></thead>
+              <tbody>
+                @for (p of pagos(); track p.id) {
+                  <tr><td>{{ p.etiqueta }}</td><td class="num">{{ n(p.ventas) }}</td><td class="num">{{ cop(p.ingresos) }}</td><td class="num">{{ pct(p.pct) }} %</td></tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    }
+  </div>
+</div>
+
+<ng-template #barras let-lista="lista" let-id="id" let-nombre="nombre">
+  <ul class="barras" [attr.aria-label]="nombre">
+    @for (b of lista; track b.clave) {
+      <li class="barra" tabindex="0"
+          (pointermove)="mostrar($event, id, b.etiqueta, filasBarra(b))" (focus)="mostrar($event, id, b.etiqueta, filasBarra(b))"
+          (pointerleave)="cerrarTip()" (blur)="cerrarTip()">
+        <span class="b-nombre">{{ b.etiqueta }}</span>
+        <span class="b-carril" [style.--p]="b.pct + '%'">
+          <span class="b-relleno"></span>
+          <span class="b-valor">{{ cop(b.ingresos) }}</span>
+        </span>
+      </li>
+    }
+  </ul>
+</ng-template>
+
+<ng-template #tooltip let-id="id">
+  @if (tip(); as t) {
+    @if (t.card === id) {
+      <div class="tip" aria-hidden="true" [class.izq]="t.x > t.ancho * 0.6" [class.abajo]="t.y < 110" [style.left.px]="t.x" [style.top.px]="t.y">
+        <strong class="tip-t">{{ t.titulo }}</strong>
+        @for (f of t.filas; track f.k) {
+          <span class="tip-f">
+            @if (f.color) { <i [style.background]="f.color"></i> }
+            <span class="tip-k">{{ f.k }}</span><b>{{ f.v }}</b>
+          </span>
+        }
+      </div>
+    }
+  }
+</ng-template>

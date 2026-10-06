@@ -6,25 +6,58 @@ from functools import wraps
 from flask import Flask, request, jsonify, g
 from flask_cors import CORS
 
+import kafka_service as eventos
 import keycloak_service as keycloak
 import semillas
 from Producto import Producto
-from Usuario import Usuario
 from Venta import Venta
 
 app = Flask(__name__)
 CORS(app)
 
-# Cada tenant es un stage de Serverless (tenantA / tenantB)
-TENANT_ID = os.environ.get("TENANT_ID", "A")
+# El negocio va en la ruta: /tenantA/productos, /tenantB/productos...
+PREFIJOS = {"tenantA": "A", "tenantB": "B"}
 
+
+class PrefijoTenant:
+    """Quita el prefijo /tenantX de la ruta y deja el negocio en environ."""
+
+    def __init__(self, wsgi):
+        self.wsgi = wsgi
+
+    def __call__(self, environ, start_response):
+        partes = environ.get("PATH_INFO", "").split("/", 2)  # ['', 'tenantA', 'productos']
+        if len(partes) > 1 and partes[1] in PREFIJOS:
+            environ["tenant.id"] = PREFIJOS[partes[1]]
+            environ["PATH_INFO"] = "/" + (partes[2] if len(partes) > 2 else "")
+        return self.wsgi(environ, start_response)
+
+
+app.wsgi_app = PrefijoTenant(app.wsgi_app)
+
+
+@app.before_request
+def exigir_tenant():
+    if "tenant.id" not in request.environ:
+        return jsonify({"mensaje": "Ruta no encontrada. Use /tenantA/... o /tenantB/..."}), 404
 
 # ==========================================
 # LISTAS TEMPORALES (en memoria)
-# Se llenan con datos de prueba (ver semillas.py)
+# Productos y ventas se llenan con datos de prueba de ambos negocios (ver semillas.py);
+# cada registro lleva su tenant_id y se filtra por el del usuario.
+# Los usuarios NO viven aqui: son los de Keycloak.
 # ==========================================
 
-productos, ventas, usuarios = semillas.cargar(TENANT_ID)
+productos, ventas = [], []
+for _tenant in keycloak.REALMS:
+    _p, _v, _ = semillas.cargar(_tenant)
+    productos += _p
+    ventas += _v
+
+
+def tenant():
+    """Negocio de la ruta (/tenantA -> A, /tenantB -> B)."""
+    return request.environ["tenant.id"]
 
 
 # ==========================================
@@ -40,15 +73,45 @@ def requiere_roles(*roles):
         def envoltura(*args, **kwargs):
             cabecera = request.headers.get("Authorization", "")
             if not cabecera.startswith("Bearer "):
+                eventos.publicar_evento(eventos.TOPIC_SEGURIDAD, {
+                    "tipo": "acceso_sin_token",
+                    "endpoint": request.path,
+                    "metodo": request.method,
+                    "ip": request.remote_addr
+                })
                 return jsonify({"mensaje": "Token requerido"}), 401
 
             try:
                 g.usuario = keycloak.validar_token(cabecera[7:])
             except keycloak.KeycloakError as e:
+                if e.status == 401:
+                    eventos.publicar_evento(eventos.TOPIC_SEGURIDAD, {
+                        "tipo": "token_invalido",
+                        "endpoint": request.path,
+                        "metodo": request.method,
+                        "ip": request.remote_addr
+                    })
                 return jsonify({"mensaje": e.mensaje}), e.status
+
+            if g.usuario["tenant_id"] != tenant():
+                eventos.publicar_evento(eventos.TOPIC_SEGURIDAD, {
+                    "tipo": "token_de_otro_negocio",
+                    "usuario": g.usuario["username"],
+                    "endpoint": request.path,
+                    "ip": request.remote_addr
+                })
+                return jsonify({"mensaje": "Token de otro negocio"}), 403
 
             permitidos = set(roles) | {"erp_admin"}
             if not permitidos & set(g.usuario["roles"]):
+                eventos.publicar_evento(eventos.TOPIC_SEGURIDAD, {
+                    "tipo": "acceso_denegado",
+                    "usuario": g.usuario["username"],
+                    "roles": g.usuario["roles"],
+                    "endpoint": request.path,
+                    "metodo": request.method,
+                    "ip": request.remote_addr
+                })
                 return jsonify({"mensaje": "Sin permisos"}), 403
 
             return f(*args, **kwargs)
@@ -86,9 +149,35 @@ def es_entero(v):
     return isinstance(v, int) and not isinstance(v, bool)
 
 
+def evento_usuario(tipo, usuario):
+    eventos.publicar_evento(eventos.TOPIC_USUARIOS, {
+        "tipo": tipo,
+        "usuario_id": usuario["id"],
+        "username": usuario["username"],
+        "roles": usuario["roles"],
+        "por": g.usuario["username"]
+    })
+
+
+def evento_producto(tipo, producto):
+    eventos.publicar_evento(eventos.TOPIC_INVENTARIO, {
+        "tipo": tipo,
+        "producto_id": producto["id"],
+        "sku": producto["sku"],
+        "nombre": producto["nombre"],
+        "stock_actual": producto["stock_actual"],
+        "por": g.usuario["username"]
+    })
+
+
+def avisar_stock_bajo(producto):
+    if producto["stock_actual"] <= producto["stock_minimo"]:
+        evento_producto("stock_bajo", producto)
+
+
 def buscar(lista, id):
     for x in lista:
-        if x["id"] == id and x["tenant_id"] == TENANT_ID:
+        if x["id"] == id and x["tenant_id"] == tenant():
             return x
     return None
 
@@ -105,11 +194,28 @@ def login():
     if falta:
         return falta
 
-    return jsonify(keycloak.login(datos["username"], datos["password"]))
+    try:
+        sesion = keycloak.login(datos["username"], datos["password"], tenant())
+    except keycloak.KeycloakError as e:
+        if e.status == 401:
+            eventos.publicar_evento(eventos.TOPIC_AUTENTICACION, {
+                "tipo": "login_fallido",
+                "usuario": datos["username"],
+                "ip": request.remote_addr
+            })
+        raise
+
+    eventos.publicar_evento(eventos.TOPIC_AUTENTICACION, {
+        "tipo": "login_exitoso",
+        "usuario": sesion["username"],
+        "roles": sesion["roles"],
+        "ip": request.remote_addr
+    })
+    return jsonify(sesion)
 
 
 # ==========================================
-# USUARIOS (datos de prueba en memoria, solo admin)
+# USUARIOS (reales: se leen y escriben en el realm de Keycloak del negocio, solo admin)
 # ==========================================
 
 def validar_roles(roles):
@@ -120,17 +226,16 @@ def validar_roles(roles):
     return None
 
 
-def username_en_uso(username, excepto_id=None):
-    return any(
-        u["username"].lower() == username.lower() and u["id"] != excepto_id
-        for u in usuarios if u["tenant_id"] == TENANT_ID
-    )
+def validar_nombre(nombre):
+    if not isinstance(nombre, str) or len(nombre.split()) < 2:
+        return "Escribe nombre y apellido"
+    return None
 
 
 @app.route('/usuarios', methods=['GET'])
 @requiere_roles()
 def listar_usuarios():
-    return jsonify([u for u in usuarios if u["tenant_id"] == TENANT_ID])
+    return jsonify(keycloak.listar_usuarios(tenant()))
 
 
 @app.route('/usuarios', methods=['POST'])
@@ -138,54 +243,47 @@ def listar_usuarios():
 def agregar_usuario():
 
     datos = cuerpo()
-    falta = faltan(datos, "username", "nombre")
+    falta = faltan(datos, "username", "nombre", "email", "password")
     if falta:
         return falta
 
-    problema = validar_roles(datos.get("roles"))
+    problema = validar_nombre(datos["nombre"]) or validar_roles(datos.get("roles"))
     if problema:
         return error(problema)
 
-    if username_en_uso(datos["username"]):
-        return error("El usuario ya existe", 409)
-
-    nuevo = Usuario(
-        str(uuid.uuid4()),
-        TENANT_ID,
-        datos["username"],
-        datos["nombre"],
-        datos.get("email", ""),
-        datos["roles"],
-        datos.get("activo", True)
+    nuevo = keycloak.crear_usuario(
+        tenant(),
+        datos["username"].strip(),
+        datos["nombre"].strip(),
+        datos["email"].strip(),
+        datos["password"],
+        datos["roles"]
     )
+    evento_usuario("usuario_creado", nuevo)
 
-    usuarios.append(nuevo.to_json())
-
-    return jsonify(nuevo.to_json()), 201
+    return jsonify(nuevo), 201
 
 
 @app.route('/usuarios/<id>', methods=['PUT'])
 @requiere_roles()
 def actualizar_usuario(id):
 
-    usuario = buscar(usuarios, id)
-    if not usuario:
-        return error("Usuario no encontrado", 404)
-
+    actual = keycloak.obtener_usuario(tenant(), id)
     datos = cuerpo()
 
-    if "roles" in datos:
+    problema = None
+    if "nombre" in datos:
+        problema = validar_nombre(datos["nombre"])
+    if not problema and "roles" in datos:
         problema = validar_roles(datos["roles"])
-        if problema:
-            return error(problema)
+    if problema:
+        return error(problema)
 
-    if "username" in datos and username_en_uso(datos["username"], id):
-        return error("El usuario ya existe", 409)
+    if datos.get("activo") is False and actual["username"] == g.usuario["username"]:
+        return error("No puedes desactivar tu propio usuario", 409)
 
-    for campo in ("username", "nombre", "email", "roles", "activo"):
-        if campo in datos:
-            usuario[campo] = datos[campo]
-
+    usuario = keycloak.actualizar_usuario(tenant(), id, datos)
+    evento_usuario("usuario_actualizado", usuario)
     return jsonify(usuario)
 
 
@@ -193,14 +291,13 @@ def actualizar_usuario(id):
 @requiere_roles()
 def eliminar_usuario(id):
 
-    usuario = buscar(usuarios, id)
-    if not usuario:
-        return error("Usuario no encontrado", 404)
+    usuario = keycloak.obtener_usuario(tenant(), id)
 
     if usuario["username"] == g.usuario["username"]:
         return error("No puedes eliminar tu propio usuario", 409)
 
-    usuarios.remove(usuario)
+    keycloak.eliminar_usuario(tenant(), id)
+    evento_usuario("usuario_eliminado", usuario)
     return jsonify({"mensaje": "Usuario eliminado"})
 
 
@@ -211,7 +308,7 @@ def eliminar_usuario(id):
 def sku_en_uso(sku, excepto_id=None):
     return any(
         p["sku"].lower() == sku.lower() and p["id"] != excepto_id
-        for p in productos if p["tenant_id"] == TENANT_ID
+        for p in productos if p["tenant_id"] == tenant()
     )
 
 
@@ -229,7 +326,7 @@ def validar_producto(datos):
 @app.route('/productos', methods=['GET'])
 @requiere_roles("erp_inventario", "erp_ventas")
 def listar_productos():
-    return jsonify([p for p in productos if p["tenant_id"] == TENANT_ID])
+    return jsonify([p for p in productos if p["tenant_id"] == tenant()])
 
 
 @app.route('/productos', methods=['POST'])
@@ -250,7 +347,7 @@ def agregar_producto():
 
     nuevo = Producto(
         str(uuid.uuid4()),
-        TENANT_ID,
+        tenant(),
         datos["sku"],
         datos["nombre"],
         datos["precio_venta"],
@@ -260,6 +357,8 @@ def agregar_producto():
     )
 
     productos.append(nuevo.to_json())
+    evento_producto("producto_creado", nuevo.to_json())
+    avisar_stock_bajo(nuevo.to_json())
 
     return jsonify(nuevo.to_json()), 201
 
@@ -286,6 +385,8 @@ def actualizar_producto(id):
         if campo in datos:
             producto[campo] = datos[campo]
 
+    evento_producto("producto_actualizado", producto)
+    avisar_stock_bajo(producto)
     return jsonify(producto)
 
 
@@ -298,6 +399,7 @@ def eliminar_producto(id):
         return error("Producto no encontrado", 404)
 
     productos.remove(producto)
+    evento_producto("producto_eliminado", producto)
     return jsonify({"mensaje": "Producto eliminado"})
 
 
@@ -311,7 +413,7 @@ METODOS_PAGO = ("efectivo", "tarjeta", "transferencia")
 @app.route('/ventas', methods=['GET'])
 @requiere_roles("erp_ventas")
 def listar_ventas():
-    return jsonify([v for v in ventas if v["tenant_id"] == TENANT_ID])
+    return jsonify([v for v in ventas if v["tenant_id"] == tenant()])
 
 
 @app.route('/ventas', methods=['POST'])
@@ -353,11 +455,13 @@ def agregar_venta():
         })
 
     for linea in lineas:
-        buscar(productos, linea["producto_id"])["stock_actual"] -= linea["cantidad"]
+        producto = buscar(productos, linea["producto_id"])
+        producto["stock_actual"] -= linea["cantidad"]
+        avisar_stock_bajo(producto)
 
     nueva = Venta(
         str(uuid.uuid4()),
-        TENANT_ID,
+        tenant(),
         g.usuario["username"],
         lineas,
         sum(l["subtotal"] for l in lineas),
@@ -366,6 +470,14 @@ def agregar_venta():
     )
 
     ventas.append(nueva.to_json())
+    eventos.publicar_evento(eventos.TOPIC_VENTAS, {
+        "tipo": "venta_registrada",
+        "venta_id": nueva.id,
+        "usuario": nueva.usuario,
+        "total": nueva.total,
+        "metodo_pago": nueva.metodo_pago,
+        "lineas": len(lineas)
+    })
 
     return jsonify(nueva.to_json()), 201
 
@@ -403,6 +515,12 @@ def anular_venta(id):
             producto["stock_actual"] += linea["cantidad"]
 
     ventas.remove(venta)
+    eventos.publicar_evento(eventos.TOPIC_VENTAS, {
+        "tipo": "venta_anulada",
+        "venta_id": venta["id"],
+        "total": venta["total"],
+        "por": g.usuario["username"]
+    })
     return jsonify({"mensaje": "Venta anulada y stock devuelto"})
 
 

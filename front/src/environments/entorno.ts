@@ -16,8 +16,6 @@ export interface Tema {
 
 export interface Entorno {
   production: boolean;
-  name: string;
-  tenant: TenantId;
-  apiUrl: string;
-  theme: Tema;
+  // Base de la API de cada negocio: <url>/tenantA y <url>/tenantB
+  apiUrls: Record<TenantId, string>;
 }

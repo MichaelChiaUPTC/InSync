@@ -2,3 +2,4 @@ Flask
 Flask-Cors
 Werkzeug
 requests
+kafka-python>=2.2

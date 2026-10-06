@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paletas Pastelería</title>
+<style>
+  :root { --bg:#f4f4f5; --fg:#18181b; --card:#fff; --bd:#e4e4e7; --mut:#71717a; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background:var(--bg); color:var(--fg); }
+  header { padding:24px 20px 8px; max-width:1400px; margin:0 auto; }
+  h1 { margin:0 0 4px; font-size:1.4rem; }
+  header p { margin:0; color:var(--mut); font-size:.9rem; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(330px,1fr)); gap:20px; padding:20px; max-width:1400px; margin:0 auto; }
+  .item { background:var(--card); border:1px solid var(--bd); border-radius:14px; padding:14px; display:flex; flex-direction:column; gap:12px; }
+  .item.elegida { outline:3px solid #2563eb; }
+  .top { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .top h2 { margin:0; font-size:1rem; }
+  .top h2 span { color:var(--mut); font-weight:500; margin-right:6px; }
+  .acciones { display:flex; gap:6px; }
+  .acciones button { font:inherit; font-size:.78rem; padding:5px 10px; border:1px solid var(--bd); background:#fff; border-radius:8px; cursor:pointer; }
+  .acciones button:hover { background:#f4f4f5; }
+
+  /* mini app */
+  .app { display:grid; grid-template-columns:96px 1fr; height:210px; border-radius:10px; overflow:hidden; border:1px solid var(--borde); background:var(--fondo); color:var(--texto); }
+  .lat { background:var(--deep); color:#fff; padding:10px 8px; display:flex; flex-direction:column; gap:8px; font-size:.62rem; }
+  .lat .logo { display:flex; align-items:center; gap:6px; font-weight:700; font-size:.7rem; }
+  .lat .logo i { width:16px; height:16px; border-radius:5px; background:var(--primary); display:block; }
+  .lat .nav { padding:5px 6px; border-radius:6px; opacity:.85; }
+  .lat .nav.on { background:#ffffff26; opacity:1; }
+  .main { padding:12px; display:flex; flex-direction:column; gap:8px; min-width:0; }
+  .main h3 { margin:0; font-size:.85rem; }
+  .main p { margin:0; font-size:.62rem; color:var(--mutfg); }
+  .fila { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .btn { background:var(--primary); color:#fff; border:0; border-radius:6px; font-size:.62rem; padding:5px 9px; font-weight:600; }
+  .chip { background:var(--muted); color:var(--ptext); border-radius:99px; font-size:.58rem; padding:3px 8px; font-weight:600; }
+  .acc { background:var(--accent); color:#fff; border-radius:99px; font-size:.58rem; padding:3px 8px; font-weight:600; }
+  .tabla { background:#fff; border:1px solid var(--borde); border-radius:8px; font-size:.6rem; overflow:hidden; }
+  .tabla div { display:flex; justify-content:space-between; padding:5px 8px; border-top:1px solid var(--borde); }
+  .tabla div:first-child { border-top:0; background:var(--muted); color:var(--mutfg); font-weight:600; }
+  .tabla b { color:var(--ptext); }
+  .bar { height:5px; border-radius:4px; background:var(--muted); overflow:hidden; }
+  .bar i { display:block; height:100%; width:62%; background:var(--secondary); }
+
+  .sw { display:grid; grid-template-columns:repeat(10,1fr); gap:3px; }
+  .sw span { height:22px; border-radius:5px; border:1px solid #0000001a; }
+  .hex { font:.64rem ui-monospace, Consolas, monospace; color:var(--mut); line-height:1.5; word-break:break-all; }
+  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#18181b; color:#fff; padding:10px 16px; border-radius:10px; font-size:.85rem; opacity:0; transition:.2s; pointer-events:none; }
+  .toast.on { opacity:1; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Pastelería Dulce Aroma — 20 paletas</h1>
+  <p>Cada tarjeta es una mini versión de la app (menú lateral, botón principal, chips, acento, tabla). Pulsa «Copiar» y pásame el número, o pega el bloque en <b>temas.ts</b>.</p>
+</header>
+<div class="grid" id="grid"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+// primary, ptext, deep, secondary, accent, bg, fg, muted, mutedFg, border
+const P = [
+ ["Maracuyá dorado (actual)", "#b45309","#92400e","#78350f","#fbbf24","#7c3aed","#fffbeb","#451a03","#fef3c7","#8a5a1c","#fde68a"],
+ ["Naranja pulpa",            "#c2410c","#9a3412","#7c2d12","#fb923c","#a21caf","#fff7ed","#431407","#ffedd5","#8c4a2f","#fed7aa"],
+ ["Cáscara morada",           "#7e22ce","#6b21a8","#581c87","#facc15","#c2410c","#faf5ff","#3b0764","#f3e8ff","#6b4a85","#e9d5ff"],
+ ["Amarillo y violeta",       "#6d28d9","#5b21b6","#4c1d95","#fde047","#b45309","#fefce8","#2e1065","#fef9c3","#6b5a1e","#fef08a"],
+ ["Mango",                    "#b45309","#9a3412","#7c2d12","#f59e0b","#15803d","#fff8e6","#3b1d08","#ffedc2","#7a5320","#fcd9a0"],
+ ["Coral tropical",           "#e11d48","#be123c","#881337","#fb923c","#a16207","#fff1f2","#4c0519","#ffe4e6","#8a3a4d","#fecdd3"],
+ ["Durazno",                  "#c2410c","#9a3412","#9a3412","#fdba74","#0f766e","#fff5ee","#3a1a0e","#ffe8d9","#8a5340","#fbd5bd"],
+ ["Miel",                     "#a16207","#854d0e","#713f12","#facc15","#9d174d","#fefce8","#3b2a05","#fef3c7","#7a6420","#fde68a"],
+ ["Café con leche",           "#92400e","#78350f","#451a03","#d6a96b","#be185d","#fdf8f3","#2b1608","#f5e9dc","#7a5a40","#e8d5bf"],
+ ["Fresa y crema",            "#be185d","#9d174d","#831843","#f9a8d4","#b45309","#fff8f5","#4a0d2a","#ffe9e4","#8a4a5e","#fbd0d0"],
+ ["Limón y lila",             "#4d7c0f","#3f6212","#365314","#bef264","#7e22ce","#fcfdf2","#1a2e05","#ecfccb","#587030","#d9f99d"],
+ ["Cacao y naranja",          "#9a3412","#7c2d12","#431407","#fb923c","#0e7490","#fffaf5","#2a0f06","#fde8d8","#84483a","#f7d2b8"],
+ ["Atardecer tropical",       "#c2410c","#9d174d","#701a75","#f472b6","#a16207","#fff7f0","#3b0a45","#fde4ef","#86397d","#f9c8de"],
+ ["Naranja y petróleo",       "#c2410c","#9a3412","#134e4a","#5eead4","#0f766e","#fffaf3","#0f2f2c","#e6f4f1","#3f6a65","#c8e6e1"],
+ ["Gelatina de maracuyá",     "#b45309","#92400e","#92400e","#fcd34d","#6d28d9","#fffdf5","#3a2a0a","#fff3c4","#7d6425","#fbe48a"],
+ ["Ciruela",                  "#86198f","#86198f","#4a044e","#e879f9","#c2410c","#fdf4ff","#3b0a40","#fae8ff","#7a3d80","#f5d0fe"],
+ ["Mandarina",                "#c2410c","#9a3412","#7c2d12","#fbbf24","#166534","#fffbf5","#3a1608","#ffedd5","#8a4f2a","#fcd9b0"],
+ ["Maracuyá intenso",         "#a16207","#854d0e","#422006","#fde047","#7c3aed","#fffef7","#2b1b04","#fef9c3","#6f5a1a","#fef08a"],
+ ["Guayaba",                  "#be123c","#9f1239","#7f1d1d","#fda4af","#4d7c0f","#fff5f5","#450a0a","#ffe4e6","#8a4040","#fecaca"],
+ ["Uva y miel",               "#5b21b6","#5b21b6","#3b0764","#fbbf24","#b45309","#fffbf0","#2e1065","#f5f0ff","#5f4a8a","#e4d9fb"],
+];
+
+const grid = document.getElementById('grid');
+const toast = document.getElementById('toast');
+const aviso = (t) => { toast.textContent = t; toast.classList.add('on'); setTimeout(() => toast.classList.remove('on'), 1800); };
+
+const codigo = (p) => `export const temaB: Tema = {
+  primaryColor: '${p[1]}',
+  primaryTextColor: '${p[2]}',
+  deepColor: '${p[3]}',
+  secondaryColor: '${p[4]}',
+  accentColor: '${p[5]}',
+  backgroundColor: '${p[6]}',
+  foregroundColor: '${p[7]}',
+  mutedColor: '${p[8]}',
+  mutedForegroundColor: '${p[9]}',
+  borderColor: '${p[10]}',
+  logo: 'logos/logo-tenantB.svg',
+};`;
+
+P.forEach((p, i) => {
+  const el = document.createElement('div');
+  el.className = 'item';
+  el.innerHTML = `
+    <div class="top">
+      <h2><span>${i + 1}</span>${p[0]}</h2>
+      <div class="acciones">
+        <button data-a="marcar">Elegir</button>
+        <button data-a="copiar">Copiar</button>
+      </div>
+    </div>
+    <div class="app" style="--primary:${p[1]};--ptext:${p[2]};--deep:${p[3]};--secondary:${p[4]};--accent:${p[5]};--fondo:${p[6]};--texto:${p[7]};--muted:${p[8]};--mutfg:${p[9]};--borde:${p[10]}">
+      <div class="lat">
+        <div class="logo"><i></i>InSync</div>
+        <div class="nav on">Inventario</div>
+        <div class="nav">Ventas</div>
+        <div class="nav">Usuarios</div>
+      </div>
+      <div class="main">
+        <h3>Inventario</h3>
+        <p>24 productos en Dulce Aroma.</p>
+        <div class="fila"><span class="btn">Nuevo producto</span><span class="chip">Torta</span><span class="acc">Stock bajo</span></div>
+        <div class="bar"><i></i></div>
+        <div class="tabla">
+          <div><span>Producto</span><span>Stock</span></div>
+          <div><span>Brownie</span><b>55</b></div>
+          <div><span>Croissant</span><b>50</b></div>
+        </div>
+      </div>
+    </div>
+    <div class="sw">${p.slice(1).map(c => `<span style="background:${c}" title="${c}"></span>`).join('')}</div>
+    <div class="hex">${p.slice(1).join(' · ')}</div>`;
+  el.querySelector('[data-a=copiar]').onclick = () => {
+    navigator.clipboard.writeText(codigo(p)).then(() => aviso(`Paleta ${i + 1} copiada`), () => aviso('No se pudo copiar'));
+  };
+  el.querySelector('[data-a=marcar]').onclick = () => {
+    el.classList.toggle('elegida');
+    const n = [...document.querySelectorAll('.elegida h2')].map(h => h.firstChild.textContent).join(', ');
+    aviso(n ? `Elegidas: ${n}` : 'Sin elegir');
+  };
+  grid.appendChild(el);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+.login { min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); }
+.lado { background: var(--color-deep); color: #fff; padding: 48px; display: flex; flex-direction: column; justify-content: space-between; gap: 48px; }
+.marca { display: flex; align-items: center; gap: 12px; font: 600 1.5rem var(--font-head); }
+.mensaje h1 { color: #fff; font-size: clamp(1.75rem, 3.2vw, 2.75rem); font-weight: 600; line-height: 1.15; max-width: 16ch; }
+.mensaje ul { list-style: none; margin: 40px 0 0; padding: 0; display: grid; gap: 0; max-width: 420px; }
+.mensaje li { display: flex; align-items: center; gap: 14px; padding: 14px 0; border-top: 1px solid #ffffff33; color: #e0e4fb; }
+.form-lado { display: grid; place-items: center; padding: 32px 24px; }
+form { width: min(460px, 100%); display: grid; gap: 24px; }
+.btn { width: 100%; }
+@media (max-width: 860px) {
+  .login { grid-template-columns: minmax(0, 1fr); }
+  .lado { padding: 24px; gap: 24px; }
+  .mensaje ul { display: none; }
+  .mensaje h1 { font-size: 1.5rem; max-width: none; }
+}
