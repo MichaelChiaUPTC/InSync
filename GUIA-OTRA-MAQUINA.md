@@ -5,10 +5,12 @@ Arquitectura que se levanta (cada servicio puede estar en una máquina o con una
 ```
 Navegador ─> Front (Vercel, o npm start)
                 └─> API Gateway + Lambda (AWS) ──> https://dense-overbuilt-unnoticed.ngrok-free.dev  (ngrok) ─> Keycloak    :8080
-                                               └─> https://<dominio-kafka>   (ngrok) ─> Kafka REST :8082 ─> Kafka
+                                               └─> https://undamaged-cascade-disobey.ngrok-free.dev   (ngrok) ─> Kafka REST :8082 ─> Kafka
 ```
 
 Lambda no alcanza `localhost`, así que Keycloak y Kafka se publican con **ngrok**. Cada cuenta gratuita de ngrok incluye **un dominio fijo** (no cambia al reiniciar), por eso hay un dominio por servicio.
+
+**Dominios del proyecto:** Keycloak `https://dense-overbuilt-unnoticed.ngrok-free.dev` y Kafka `https://undamaged-cascade-disobey.ngrok-free.dev`.
 
 **Dominio de Keycloak del proyecto: `https://dense-overbuilt-unnoticed.ngrok-free.dev`.** Es el dominio de ngrok del dueño de Keycloak y se usa siempre. Lo que sigue importa mucho:
 
@@ -20,10 +22,13 @@ Lambda no alcanza `localhost`, así que Keycloak y Kafka se publican con **ngrok
 | Rol | Qué corre | Pasos de esta guía |
 |---|---|---|
 | **Dueño de Keycloak** (dueño del dominio de arriba) | Keycloak y el túnel de ngrok de Keycloak | 0, 0.1, 1, 2 |
-| **Dueño de Kafka** (otra persona, con su propio dominio de ngrok) | Docker con Kafka y el túnel de ngrok del proxy | 0, 0.1, 8 |
-| **Cualquier otra máquina** (desplegar el backend, correr el front, probar) | Nada de lo anterior | 0 (solo Git, Node y AWS CLI), 4, 5, 6, 7 |
+| **Dueño de Kafka** (otra persona, con su propio dominio de ngrok: `undamaged-cascade-disobey.ngrok-free.dev`) | Docker con Kafka y el túnel de ngrok del proxy | 0, 0.1, 8 |
+| **Compañero que solo quiere correr la app** | Solo el front (`npm start`); usa el backend ya desplegado | 0 (solo Git y Node), 7 |
+| **Quien despliegue su propio backend o lo corra en local** | El backend (Lambda propia o `serverless wsgi serve`) | 0 (Git, Node, AWS CLI; Python si es local), 4, 5, 6, 7 |
 
-Si solo vas a desplegar el backend o correr el front, **salta directo al paso 4**: necesitas que el dueño de Keycloak tenga todo encendido y que te dé los dos *client secrets*.
+**Lo más simple para un compañero es solo el front** (paso 7): el backend ya desplegado apunta al Keycloak del dueño, así que no necesita secrets, `back/.env`, AWS ni ngrok. Solo hace falta que el dueño de Keycloak tenga encendidos Keycloak y su túnel, y que haya subido (commit y push) el código actual a GitHub.
+
+Si vas a desplegar tu propio backend o a correrlo en local, **salta al paso 4**: necesitas, además, que el dueño te dé los dos *client secrets*.
 
 ## Las terminales
 
@@ -56,7 +61,7 @@ No todas las máquinas necesitan todo: **Java** y **ngrok** solo en la del dueñ
 ```powershell
 git clone https://github.com/MichaelChiaUPTC/InSync.git
 cd InSync
-git checkout feat/front-integracion        # o main, según dónde esté lo último
+git checkout correccion-distribuido        # la rama con lo último; si ya está en main, usa main
 ```
 
 **0.1 Configurar ngrok** (una sola vez, solo quien publique un servicio: el dueño de Keycloak y el dueño de Kafka):
@@ -204,7 +209,18 @@ npm install
 npm start                      # http://localhost:4200
 ```
 
-Abre http://localhost:4200 e inicia sesión. El front usa la API que indique `BASE` en [environment.ts](front/src/environments/environment.ts).
+Abre http://localhost:4200 e inicia sesión con un usuario de Keycloak (por ejemplo uno de los que cree el dueño). El front usa la API que indique `BASE` en [environment.ts](front/src/environments/environment.ts), que ya apunta al backend desplegado: no hay que configurar nada más. Si el login da error, casi siempre es que Keycloak o su túnel no están encendidos en la PC del dueño.
+
+**Un compañero que solo quiere correr la app**, desde cero:
+
+```powershell
+git clone https://github.com/MichaelChiaUPTC/InSync.git
+cd InSync
+git checkout correccion-distribuido        # la rama con lo último; si ya está en main, usa main
+cd front
+npm install
+npm start                                  # http://localhost:4200
+```
 
 **Front en Vercel.** Se despliega solo desde GitHub: *Root Directory* `front`, y el [vercel.json](front/vercel.json) ya trae el build (`ng build --configuration aws`). Si cambias `BASE`, haz commit y push; Vercel vuelve a desplegar. Para el login desde la web de Vercel, el túnel y Keycloak deben estar encendidos.
 
@@ -224,13 +240,13 @@ Kafka UI queda en http://localhost:8083 → *Topics*. Los topics se crean solos 
 
 1. Terminal **TÚNEL KAFKA** (en la máquina de Kafka, déjala abierta):
    ```powershell
-   ngrok http --url=https://<dominio-kafka> 8082
+   ngrok http --url=https://undamaged-cascade-disobey.ngrok-free.dev 8082
    ```
 2. Comprueba desde la terminal **BACK** que responde (debe listar los topics en JSON):
    ```powershell
-   curl.exe https://<dominio-kafka>/topics
+   curl.exe https://undamaged-cascade-disobey.ngrok-free.dev/topics
    ```
-3. Añade a `back/.env` la línea `KAFKA_REST_URL=https://<dominio-kafka>` y despliega desde la terminal **BACK**:
+3. Añade a `back/.env` la línea `KAFKA_REST_URL=https://undamaged-cascade-disobey.ngrok-free.dev` y despliega desde la terminal **BACK**:
    ```powershell
    npx serverless deploy
    ```
