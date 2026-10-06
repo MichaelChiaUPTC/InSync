@@ -16,6 +16,10 @@
       <label for="e">Correo</label>
       <input id="e" class="input" type="email" autocomplete="off" placeholder="nombre@empresa.co" [value]="email()" (input)="email.set($any($event.target).value)" />
     </div>
+    <div class="field">
+      <label for="p">{{ usuario() ? 'Nueva contraseña (opcional)' : 'Contraseña' }}</label>
+      <input id="p" class="input" type="password" autocomplete="new-password" [value]="password()" (input)="password.set($any($event.target).value)" />
+    </div>
     <fieldset class="field">
       <legend class="label">Roles</legend>
       @for (r of roles; track r.id) {

@@ -25,6 +25,12 @@ export const routes: Routes = [
         loadChildren: () => import('./gestion-ventas/gestion-ventas.module').then((m) => m.GestionVentasModule),
       },
       {
+        path: 'estadisticas',
+        canActivate: [accesoGuard],
+        data: { roles: ['erp_admin', 'erp_ventas'] },
+        loadChildren: () => import('./estadisticas-ventas/estadisticas-ventas.module').then((m) => m.EstadisticasVentasModule),
+      },
+      {
         path: 'usuarios',
         canActivate: [accesoGuard],
         data: { roles: ['erp_admin'] },

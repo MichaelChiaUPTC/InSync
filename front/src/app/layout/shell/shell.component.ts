@@ -18,7 +18,10 @@ export class ShellComponent {
   protected readonly enlaces = computed(() => {
     this.store.sesion();
     const l = [{ ruta: '/inventario', texto: 'Inventario', icono: 'box' }];
-    if (this.store.tieneRol('erp_ventas', 'erp_admin')) l.push({ ruta: '/ventas', texto: 'Ventas', icono: 'cart' });
+    if (this.store.tieneRol('erp_ventas', 'erp_admin')) {
+      l.push({ ruta: '/ventas', texto: 'Ventas', icono: 'cart' });
+      l.push({ ruta: '/estadisticas', texto: 'Estadísticas', icono: 'chart' });
+    }
     if (this.store.tieneRol('erp_admin')) l.push({ ruta: '/usuarios', texto: 'Usuarios', icono: 'users' });
     return l;
   });

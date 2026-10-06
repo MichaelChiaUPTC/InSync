@@ -6,13 +6,17 @@ provider:
   name: aws
   runtime: python3.14
   region: us-east-1
+  timeout: 25   # listar usuarios hace varias llamadas a Keycloak a traves del tunel (por defecto Lambda corta a los 6 s)
+  # Estos valores son de cada maquina: van en back/.env (no se sube a git; plantilla en back/env.ejemplo)
   environment:
-    KEYCLOAK_URL: ${env:KEYCLOAK_URL, 'https://courses-medications-white-cadillac.trycloudflare.com'}
+    KEYCLOAK_URL: ${env:KEYCLOAK_URL}
     KEYCLOAK_CLIENT_ID: ${env:KEYCLOAK_CLIENT_ID, 'Beta0'}
-    KEYCLOAK_CLIENT_SECRET_A: ${env:KEYCLOAK_CLIENT_SECRET_A, 'rLZBbYYwUcgeLBTUMIdh6YMB6lPCuLi4'}
-    KEYCLOAK_CLIENT_SECRET_B: ${env:KEYCLOAK_CLIENT_SECRET_B, 'sARcBBofRI6NWwJmkNrNmcfllu72zzVB'}
+    KEYCLOAK_CLIENT_SECRET_A: ${env:KEYCLOAK_CLIENT_SECRET_A}
+    KEYCLOAK_CLIENT_SECRET_B: ${env:KEYCLOAK_CLIENT_SECRET_B}
     # Vacio = Kafka desactivado. Ej: "54.12.34.56:9092"
     KAFKA_BOOTSTRAP_SERVERS: ${env:KAFKA_BOOTSTRAP_SERVERS, ''}
+    # URL publica (tunel ngrok) del Kafka REST Proxy; vacio = no se usa
+    KAFKA_REST_URL: ${env:KAFKA_REST_URL, ''}
 
 functions:
   app:

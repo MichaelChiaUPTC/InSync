@@ -30,7 +30,7 @@ export class GestionUsuariosService {
     }
   }
 
-  async crearUsuario(u: Omit<Usuario, 'id' | 'activo'>): Promise<Resultado> {
+  async crearUsuario(u: Omit<Usuario, 'id' | 'activo'> & { password: string }): Promise<Resultado> {
     try {
       await firstValueFrom(this.http.post(this.url, u));
       await this.cargarUsuarios();
@@ -40,7 +40,7 @@ export class GestionUsuariosService {
     }
   }
 
-  async actualizarUsuario(id: string, u: Pick<Usuario, 'nombre' | 'email' | 'roles' | 'activo'>): Promise<Resultado> {
+  async actualizarUsuario(id: string, u: Pick<Usuario, 'nombre' | 'email' | 'roles' | 'activo'> & { password?: string }): Promise<Resultado> {
     try {
       await firstValueFrom(this.http.put(`${this.url}/${id}`, u));
       await this.cargarUsuarios();

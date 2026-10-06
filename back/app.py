@@ -10,7 +10,6 @@ import kafka_service as eventos
 import keycloak_service as keycloak
 import semillas
 from Producto import Producto
-from Usuario import Usuario
 from Venta import Venta
 
 app = Flask(__name__)
@@ -44,16 +43,16 @@ def exigir_tenant():
 
 # ==========================================
 # LISTAS TEMPORALES (en memoria)
-# Se llenan con datos de prueba de ambos negocios (ver semillas.py);
+# Productos y ventas se llenan con datos de prueba de ambos negocios (ver semillas.py);
 # cada registro lleva su tenant_id y se filtra por el del usuario.
+# Los usuarios NO viven aqui: son los de Keycloak.
 # ==========================================
 
-productos, ventas, usuarios = [], [], []
+productos, ventas = [], []
 for _tenant in keycloak.REALMS:
-    _p, _v, _u = semillas.cargar(_tenant)
+    _p, _v, _ = semillas.cargar(_tenant)
     productos += _p
     ventas += _v
-    usuarios += _u
 
 
 def tenant():
@@ -216,7 +215,7 @@ def login():
 
 
 # ==========================================
-# USUARIOS (datos de prueba en memoria, solo admin)
+# USUARIOS (reales: se leen y escriben en el realm de Keycloak del negocio, solo admin)
 # ==========================================
 
 def validar_roles(roles):
@@ -227,17 +226,16 @@ def validar_roles(roles):
     return None
 
 
-def username_en_uso(username, excepto_id=None):
-    return any(
-        u["username"].lower() == username.lower() and u["id"] != excepto_id
-        for u in usuarios if u["tenant_id"] == tenant()
-    )
+def validar_nombre(nombre):
+    if not isinstance(nombre, str) or len(nombre.split()) < 2:
+        return "Escribe nombre y apellido"
+    return None
 
 
 @app.route('/usuarios', methods=['GET'])
 @requiere_roles()
 def listar_usuarios():
-    return jsonify([u for u in usuarios if u["tenant_id"] == tenant()])
+    return jsonify(keycloak.listar_usuarios(tenant()))
 
 
 @app.route('/usuarios', methods=['POST'])
@@ -245,55 +243,46 @@ def listar_usuarios():
 def agregar_usuario():
 
     datos = cuerpo()
-    falta = faltan(datos, "username", "nombre")
+    falta = faltan(datos, "username", "nombre", "email", "password")
     if falta:
         return falta
 
-    problema = validar_roles(datos.get("roles"))
+    problema = validar_nombre(datos["nombre"]) or validar_roles(datos.get("roles"))
     if problema:
         return error(problema)
 
-    if username_en_uso(datos["username"]):
-        return error("El usuario ya existe", 409)
-
-    nuevo = Usuario(
-        str(uuid.uuid4()),
+    nuevo = keycloak.crear_usuario(
         tenant(),
-        datos["username"],
-        datos["nombre"],
-        datos.get("email", ""),
-        datos["roles"],
-        datos.get("activo", True)
+        datos["username"].strip(),
+        datos["nombre"].strip(),
+        datos["email"].strip(),
+        datos["password"],
+        datos["roles"]
     )
+    evento_usuario("usuario_creado", nuevo)
 
-    usuarios.append(nuevo.to_json())
-    evento_usuario("usuario_creado", nuevo.to_json())
-
-    return jsonify(nuevo.to_json()), 201
+    return jsonify(nuevo), 201
 
 
 @app.route('/usuarios/<id>', methods=['PUT'])
 @requiere_roles()
 def actualizar_usuario(id):
 
-    usuario = buscar(usuarios, id)
-    if not usuario:
-        return error("Usuario no encontrado", 404)
-
+    actual = keycloak.obtener_usuario(tenant(), id)
     datos = cuerpo()
 
-    if "roles" in datos:
+    problema = None
+    if "nombre" in datos:
+        problema = validar_nombre(datos["nombre"])
+    if not problema and "roles" in datos:
         problema = validar_roles(datos["roles"])
-        if problema:
-            return error(problema)
+    if problema:
+        return error(problema)
 
-    if "username" in datos and username_en_uso(datos["username"], id):
-        return error("El usuario ya existe", 409)
+    if datos.get("activo") is False and actual["username"] == g.usuario["username"]:
+        return error("No puedes desactivar tu propio usuario", 409)
 
-    for campo in ("username", "nombre", "email", "roles", "activo"):
-        if campo in datos:
-            usuario[campo] = datos[campo]
-
+    usuario = keycloak.actualizar_usuario(tenant(), id, datos)
     evento_usuario("usuario_actualizado", usuario)
     return jsonify(usuario)
 
@@ -302,14 +291,12 @@ def actualizar_usuario(id):
 @requiere_roles()
 def eliminar_usuario(id):
 
-    usuario = buscar(usuarios, id)
-    if not usuario:
-        return error("Usuario no encontrado", 404)
+    usuario = keycloak.obtener_usuario(tenant(), id)
 
     if usuario["username"] == g.usuario["username"]:
         return error("No puedes eliminar tu propio usuario", 409)
 
-    usuarios.remove(usuario)
+    keycloak.eliminar_usuario(tenant(), id)
     evento_usuario("usuario_eliminado", usuario)
     return jsonify({"mensaje": "Usuario eliminado"})
 

@@ -22,6 +22,7 @@ export class CrearUsuarioComponent {
   protected readonly nombre = signal('');
   protected readonly email = signal('');
   protected readonly username = signal('');
+  protected readonly password = signal('');
   protected readonly activo = signal(true);
   protected readonly sel = signal<Rol[]>(['erp_ventas']);
   protected readonly error = signal('');
@@ -32,6 +33,7 @@ export class CrearUsuarioComponent {
       const u = this.usuario();
       untracked(() => {
         this.error.set('');
+        this.password.set('');
         if (u) {
           this.nombre.set(u.nombre); this.email.set(u.email); this.username.set(u.username);
           this.activo.set(u.activo); this.sel.set([...u.roles]);
@@ -51,15 +53,17 @@ export class CrearUsuarioComponent {
     ev.preventDefault();
     const email = this.email().trim();
     const nombre = this.nombre().trim();
-    if (!nombre) return this.error.set('Escribe el nombre de la persona.');
+    if (nombre.split(/\s+/).filter(Boolean).length < 2) return this.error.set('Escribe nombre y apellido.');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return this.error.set('Escribe un correo válido, por ejemplo nombre@empresa.co.');
     if (!this.username().trim()) return this.error.set('Escribe el nombre de usuario.');
     if (this.sel().length === 0) return this.error.set('Asigna al menos un rol.');
 
     const actual = this.usuario();
+    const password = this.password();
+    if (!actual && !password) return this.error.set('Escribe una contraseña para el usuario.');
     const r = actual
-      ? await this.servicio.actualizarUsuario(actual.id, { nombre, email, roles: this.sel(), activo: this.activo() })
-      : await this.servicio.crearUsuario({ username: this.username().trim(), nombre, email, roles: this.sel() });
+      ? await this.servicio.actualizarUsuario(actual.id, { nombre, email, roles: this.sel(), activo: this.activo(), ...(password ? { password } : {}) })
+      : await this.servicio.crearUsuario({ username: this.username().trim(), nombre, email, roles: this.sel(), password });
     if (!r.ok) return this.error.set(r.error);
     this.store.avisar(actual ? `Usuario ${nombre} actualizado.` : `Usuario ${nombre} creado.`);
     this.cerrado.emit();
